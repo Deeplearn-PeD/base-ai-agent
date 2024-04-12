@@ -13,6 +13,7 @@ packages = [
 python = "^3.11"
 loguru = "^0.7.2"
 PyYAML = "^6.0.1"
+piper-tts = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"

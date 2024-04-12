@@ -1,4 +1,3 @@
-import pydantic
 from base_agent.voice import talk
 import yaml
 
@@ -11,13 +10,12 @@ class BasePersona:
         self.model = model
         self.voice = talk.Speaker(language=self.active_language)
         self.say = self.voice.say
-        self.context_prompt = base_prompt[self.active_language]
+        self.context_prompt = None
 
     def set_language(self, language: str):
         if language in self.languages:
             self.active_language = language
             self.voice = talk.Speaker(language=self.active_language)
             self.say = self.voice.say
-            self.context_prompt = base_prompt[self.active_language]
         else:
             raise ValueError(f"Language {language} not supported by this persona.")
