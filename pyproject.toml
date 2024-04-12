@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "base-ai-agent"
+version = "0.1.0"
+description = "Base class for all of Deeplearn's  AI agents."
+authors = ["Flávio Codeço Coelho <fccoelho@gmail.com>"]
+license = "GPLv3"
+readme = "README.md"
+packages = [
+    {include = "base_agent"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+loguru = "^0.7.2"
+PyYAML = "^6.0.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"
+pytest-cov = "^5.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
