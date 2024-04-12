@@ -2,14 +2,14 @@ from unittest.mock import patch
 from base_agent.voice import talk
 
 def test_speaker_initialization_sets_correct_attributes():
-    speaker = talk.Speaker(voice='faber-medium', language='pt_BR')
+    speaker = talk.Speaker(language='pt_BR')
     assert speaker.voice == 'faber-medium'
     assert speaker.language == 'pt_BR'
     assert speaker.model == 'pt_BR-faber-medium'
     assert speaker.outfile == '/tmp/speech.wav'
 
-@patch('voice.talk.sp.Popen')
-@patch('voice.talk.sp.call')
+@patch('base_agent.voice.talk.sp.Popen')
+@patch('base_agent.voice.talk.sp.call')
 def test_speaker_say_calls_correct_commands(mock_call, mock_popen):
     speaker = talk.Speaker()
     mock_popen.return_value.communicate.return_value = (b'', b'')
