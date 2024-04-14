@@ -1,3 +1,15 @@
 languages:
   - en_US
   - pt_BR
+
+ # Language models supported
+---
+openai:
+  gpt-4:
+    interface="API"
+Google:
+  gemma:
+    interface="ollama"
+
+
+ # Language models supported
