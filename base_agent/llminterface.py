@@ -19,6 +19,8 @@ class LangModel:
             return self.get_gpt_response(question, context)
         elif 'gemma' in self.model:
             return self.get_gemma_response(question, context)
+        elif 'llama3 in self.model':
+            return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str)->str:
         response = self.llm.chat.completions.create(
@@ -49,4 +51,18 @@ class LangModel:
         return response['response']
         # return '/n'.join([resp['response'] for resp in response ])
 
+    def get_ollama_response(self, question: str, context: str) -> str:
+        """
+        Get response from any Ollama supported model
+        :param question: question to ask
+        :param context: context to provide
+        :return: model's response
+        """
+        response = self.llm.generate(
+            model=self.model,
+            system=context[:2048],
+            prompt=question,
+        )
 
+        return response['response']
+        # return '/n'.join([resp['response'] for resp in response ])
