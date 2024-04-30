@@ -16,6 +16,10 @@ PyYAML = "^6.0.1"
 openai = "^1.16.0"
 ollama = "^0.1.8"
 python-dotenv = "^1.0.1"
+
+
+[tool.poetry.group.voice]
+optional = true
 piper-tts = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
