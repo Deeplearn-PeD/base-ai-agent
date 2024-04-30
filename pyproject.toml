@@ -20,6 +20,8 @@ python-dotenv = "^1.0.1"
 
 [tool.poetry.group.voice]
 optional = true
+
+[tool.poetry.group.voice.dependencies]
 piper-tts = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
