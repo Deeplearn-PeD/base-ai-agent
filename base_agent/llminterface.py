@@ -16,10 +16,13 @@ class LangModel:
 
     def get_response(self, question: str, context: str = None) -> str:
         if 'gpt' in self.model:
+            self.model = 'gpt-4-0125-preview'
             return self.get_gpt_response(question, context)
         elif 'gemma' in self.model:
+            self.model = 'gemma'
             return self.get_gemma_response(question, context)
-        elif 'llama3 in self.model':
+        elif 'llama in self.model':
+            self.model = 'llama3'
             return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str)->str:
