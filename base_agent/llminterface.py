@@ -30,6 +30,9 @@ class LangModel:
         elif 'wizard' in self.model:
             self.model = 'wizardlm2'
             return self.get_ollama_response(question, context)
+        elif 'phi' in self.model:
+            self.model = 'phi3'
+            return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str)->str:
         response = self.llm.chat.completions.create(
