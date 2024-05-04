@@ -21,6 +21,9 @@ class LangModel:
             return self.get_gemma_response(question, context)
         elif 'llama3 in self.model':
             return self.get_ollama_response(question, context)
+        elif 'wizard' in self.model:
+            self.model = 'wizardlm2'
+            return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str)->str:
         response = self.llm.chat.completions.create(
