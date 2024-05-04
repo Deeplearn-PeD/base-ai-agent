@@ -21,6 +21,9 @@ class LangModel:
         elif 'gemma' in self.model:
             self.model = 'gemma'
             return self.get_gemma_response(question, context)
+        elif 'codegemma' in self.model:
+            self.model = 'codegemma'
+            return self.get_ollama_response(question, context)
         elif 'llama' in self.model:
             self.model = 'llama3'
             return self.get_ollama_response(question, context)
