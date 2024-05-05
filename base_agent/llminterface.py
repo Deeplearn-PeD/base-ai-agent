@@ -10,13 +10,13 @@ class LangModel:
     """
     Interface to interact with language models
     """
-    def __init__(self, model: str = 'gpt-4-0125-preview'):
+    def __init__(self, model: str = 'gpt-4-turbo'):
         self.llm = OpenAI(api_key=os.getenv('OPENAI_API_KEY')) if 'gpt' in model else Client(host='http://localhost:11434')
         self.model = model
 
     def get_response(self, question: str, context: str = None) -> str:
         if 'gpt' in self.model:
-            self.model = 'gpt-4-0125-preview'
+            self.model = 'gpt-4-turbo'
             return self.get_gpt_response(question, context)
         elif 'gemma' in self.model:
             self.model = 'gemma'
@@ -48,7 +48,7 @@ class LangModel:
                 }
             ],
             max_tokens=100,
-            temperature=0.5,
+            temperature=0.1,
             top_p=1
         )
         return response.choices[0].message.content
