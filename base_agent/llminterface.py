@@ -3,38 +3,44 @@ from ollama import Client
 import ollama
 import dotenv
 import os
+from typing import List, Dict
 
 dotenv.load_dotenv()
+
 
 class LangModel:
     """
     Interface to interact with language models
     """
+
     def __init__(self, model: str = 'gpt-4-turbo'):
-        self.llm = OpenAI(api_key=os.getenv('OPENAI_API_KEY')) if 'gpt' in model else Client(host='http://localhost:11434')
-        self.model = model
+        self.llm = OpenAI(api_key=os.getenv('OPENAI_API_KEY')) if 'gpt' in model else Client(
+            host='http://localhost:11434')
+        self.available_models: List = ollama.list()['models']
+        self.model = "llama3"
+        self._set_active_model(model)
+
+    def _set_active_model(self, model: str):
+        if model in [m['name'].split(':')[0] for m in self.available_models]:
+            self.model = model
+        elif 'gpt' in model:
+            self.model = 'gpt-4-turbo'
+        else:
+            raise ValueError(f"Model {model} not supported.\nAvailable models: {[m['name'] for m in self.available_models]}")
+            self.model = "llama3"
+
 
     def get_response(self, question: str, context: str = None) -> str:
         if 'gpt' in self.model:
-            self.model = 'gpt-4-turbo'
             return self.get_gpt_response(question, context)
-        elif 'gemma' in self.model:
+        elif self.model == 'gemma':
             self.model = 'gemma'
             return self.get_gemma_response(question, context)
-        elif 'codegemma' in self.model:
-            self.model = 'codegemma'
-            return self.get_ollama_response(question, context)
-        elif 'llama' in self.model:
-            self.model = 'llama3'
-            return self.get_ollama_response(question, context)
-        elif 'wizard' in self.model:
-            self.model = 'wizardlm2'
-            return self.get_ollama_response(question, context)
-        elif 'phi' in self.model:
-            self.model = 'phi3'
+        else:
             return self.get_ollama_response(question, context)
 
-    def get_gpt_response(self, question: str, context: str)->str:
+
+    def get_gpt_response(self, question: str, context: str) -> str:
         response = self.llm.chat.completions.create(
             model=self.model,
             messages=[
