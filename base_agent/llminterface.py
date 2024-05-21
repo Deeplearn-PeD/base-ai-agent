@@ -13,7 +13,7 @@ class LangModel:
     Interface to interact with language models
     """
 
-    def __init__(self, model: str = 'gpt-4-turbo'):
+    def __init__(self, model: str = 'gpt-4o'):
         self.llm = OpenAI(api_key=os.getenv('OPENAI_API_KEY')) if 'gpt' in model else Client(
             host='http://localhost:11434')
         self.available_models: List = ollama.list()['models']
@@ -24,7 +24,7 @@ class LangModel:
         if model in [m['name'].split(':')[0] for m in self.available_models]:
             self.model = model
         elif 'gpt' in model:
-            self.model = 'gpt-4-turbo'
+            self.model = 'gpt-4o'
         else:
             raise ValueError(f"Model {model} not supported.\nAvailable models: {[m['name'] for m in self.available_models]}")
             self.model = "llama3"
@@ -62,7 +62,7 @@ class LangModel:
     def get_gemma_response(self, question: str, context: str) -> str:
         response = ollama.generate(
             model=self.model,
-            system=context[:2048],
+            system=context,
             prompt=question,
         )
 
@@ -78,7 +78,7 @@ class LangModel:
         """
         response = self.llm.generate(
             model=self.model,
-            system=context[:2048],
+            system=context,
             prompt=question,
         )
 
