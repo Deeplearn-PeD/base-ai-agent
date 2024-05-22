@@ -14,8 +14,13 @@ class LangModel:
     """
 
     def __init__(self, model: str = 'gpt-4o'):
-        self.llm = OpenAI(api_key=os.getenv('OPENAI_API_KEY')) if 'gpt' in model else Client(
-            host='http://localhost:11434')
+        if 'gpt' in model:
+            api_key = os.getenv('OPENAI_API_KEY')
+            self.llm = OpenAI(api_key=api_key)
+        else:
+            host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+            self.llm = Client(host=host)
+
         self.available_models: List = ollama.list()['models']
         self.model = "llama3"
         self._set_active_model(model)
