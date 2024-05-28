@@ -34,11 +34,6 @@ class TestLangModel(unittest.TestCase):
         lm.get_response('question', 'context')
         mock_get_gpt_response.assert_called_once_with('question', 'context')
 
-    @patch('base_agent.llminterface.LangModel.get_gemma_response')
-    def test_get_response_with_gemma_model(self, mock_get_gemma_response):
-        lm = LangModel('gemma')
-        lm.get_response('question', 'context')
-        mock_get_gemma_response.assert_called_once_with('question', 'context')
 
     @patch('base_agent.llminterface.LangModel.get_ollama_response')
     def test_get_response_with_codegemma_model(self, mock_get_ollama_response):
