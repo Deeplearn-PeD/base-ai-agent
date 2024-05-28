@@ -3,11 +3,56 @@ from ollama import Client
 import ollama
 import dotenv
 import os
+from collections import deque
 from typing import List, Dict
 
 dotenv.load_dotenv()
 
+class ChatHistory:
+    """
+    The ChatHistory class is a FIFO queue that keeps track of chat history.
 
+    Attributes:
+        queue (collections.deque): A deque object that stores the chat history.
+    """
+
+    def __init__(self, max_size=1000):
+        """
+        Initialize the ChatHistory class with a maximum size.
+
+        Args:
+            max_size (int): The maximum size of the queue. Defaults to 1000.
+        """
+        self.queue = deque(maxlen=max_size)
+
+    def enqueue(self, item):
+        """
+        Add a message to the end of the queue.
+
+        Args:
+            item: The message to be added to the queue.
+        """
+        self.queue.append(item)
+
+    def dequeue(self):
+        """
+        Remove and return a message  from the front of the queue.
+
+        Returns:
+            The message removed from the front of the queue. If the queue is empty, returns None.
+        """
+        if len(self.queue) == 0:
+            return None
+        return self.queue.popleft()
+
+    def get_all(self):
+        """
+        Return all items in the queue as a list without removing them from the queue.
+
+        Returns:
+            list: A list of all items in the queue.
+        """
+        return list(self.queue)
 class LangModel:
     """
     Interface to interact with language models
@@ -23,6 +68,7 @@ class LangModel:
 
         self.available_models: List = ollama.list()['models']
         self.model = "llama3"
+        self.chat_history = ChatHistory()
         self._set_active_model(model)
 
     def _set_active_model(self, model: str):
@@ -38,9 +84,6 @@ class LangModel:
     def get_response(self, question: str, context: str = None) -> str:
         if 'gpt' in self.model:
             return self.get_gpt_response(question, context)
-        elif self.model == 'gemma':
-            self.model = 'gemma'
-            return self.get_gemma_response(question, context)
         else:
             return self.get_ollama_response(question, context)
 
@@ -64,16 +107,6 @@ class LangModel:
         )
         return response.choices[0].message.content
 
-    def get_gemma_response(self, question: str, context: str) -> str:
-        response = ollama.generate(
-            model=self.model,
-            system=context,
-            prompt=question,
-        )
-
-        return response['response']
-        # return '/n'.join([resp['response'] for resp in response ])
-
     def get_ollama_response(self, question: str, context: str) -> str:
         """
         Get response from any Ollama supported model
@@ -81,11 +114,17 @@ class LangModel:
         :param context: context to provide
         :return: model's response
         """
-        response = self.llm.generate(
+        msg = {
+            'role': 'user',
+            'content': context + '\n\n' + question
+        }
+        self.chat_history.enqueue(msg)
+        messages = self.chat_history.get_all()
+        response = self.llm.chat(
             model=self.model,
-            system=context,
-            prompt=question,
+            messages=messages,
+            options={'temperature': 0}
         )
+        self.chat_history.enqueue(response['message'])
 
-        return response['response']
-        # return '/n'.join([resp['response'] for resp in response ])
+        return response['message']['content']

@@ -30,7 +30,7 @@ class TestLangModel(unittest.TestCase):
 
     @patch('base_agent.llminterface.LangModel.get_gpt_response')
     def test_get_response_with_gpt_model(self, mock_get_gpt_response):
-        lm = LangModel('gpt-4-turbo')
+        lm = LangModel('gpt-4o')
         lm.get_response('question', 'context')
         mock_get_gpt_response.assert_called_once_with('question', 'context')
 
