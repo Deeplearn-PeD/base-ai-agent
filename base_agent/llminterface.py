@@ -8,10 +8,10 @@ from typing import List, Dict
 
 dotenv.load_dotenv()
 
+
 class ChatHistory:
     """
     The ChatHistory class is a FIFO queue that keeps track of chat history.
-
     Attributes:
         queue (collections.deque): A deque object that stores the chat history.
     """
@@ -53,6 +53,8 @@ class ChatHistory:
             list: A list of all items in the queue.
         """
         return list(self.queue)
+
+
 class LangModel:
     """
     Interface to interact with language models
@@ -71,15 +73,18 @@ class LangModel:
         self.chat_history = ChatHistory()
         self._set_active_model(model)
 
+    def reset_chat_history(self):
+        self.chat_history = ChatHistory()
+
     def _set_active_model(self, model: str):
         if model in [m['name'].split(':')[0] for m in self.available_models]:
             self.model = model
         elif 'gpt' in model:
             self.model = 'gpt-4o'
         else:
-            raise ValueError(f"Model {model} not supported.\nAvailable models: {[m['name'] for m in self.available_models]}")
+            raise ValueError(
+                f"Model {model} not supported.\nAvailable models: {[m['name'] for m in self.available_models]}")
             self.model = "llama3"
-
 
     def get_response(self, question: str, context: str = None) -> str:
         if 'gpt' in self.model:
@@ -87,24 +92,10 @@ class LangModel:
         else:
             return self.get_ollama_response(question, context)
 
-
     def get_gpt_response(self, question: str, context: str) -> str:
-        response = self.llm.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    'role': 'system',
-                    'content': context
-                },
-                {
-                    'role': 'user',
-                    'content': question
-                }
-            ],
-            max_tokens=100,
-            temperature=0.1,
-            top_p=1
-        )
+        response = self.llm.chat.completions.create(model=self.model,
+            messages=[{'role': 'system', 'content': context}, {'role': 'user', 'content': question}], max_tokens=100,
+            temperature=0.1, top_p=1)
         return response.choices[0].message.content
 
     def get_ollama_response(self, question: str, context: str) -> str:
@@ -114,17 +105,10 @@ class LangModel:
         :param context: context to provide
         :return: model's response
         """
-        msg = {
-            'role': 'user',
-            'content': context + '\n\n' + question
-        }
+        msg = {'role': 'user', 'content': context + '\n\n' + question}
         self.chat_history.enqueue(msg)
         messages = self.chat_history.get_all()
-        response = self.llm.chat(
-            model=self.model,
-            messages=messages,
-            options={'temperature': 0}
-        )
+        response = self.llm.chat(model=self.model, messages=messages, options={'temperature': 0})
         self.chat_history.enqueue(response['message'])
 
         return response['message']['content']
