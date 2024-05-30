@@ -70,7 +70,7 @@ class LangModel:
             self.llm = Client(host=host)
 
         self.available_models: List = ollama.list()['models']
-        self.model = "llama3"
+        self.model = model
         self.chat_history = ChatHistory()
         self._set_active_model(model)
 
@@ -121,6 +121,7 @@ class StructuredLangModel:
 
     def __init__(self, model: str = 'gpt-4o'):
         self.model = model
+        self.chat_history = ChatHistory()
         if 'gpt' in model:
             api_key = os.getenv('OPENAI_API_KEY')
             self.llm = instructor.from_openai(OpenAI(api_key=api_key))
@@ -130,6 +131,9 @@ class StructuredLangModel:
                     base_url=os.getenv('OLLAMA_HOST', 'http://localhost:11434'),
                     api_key=os.getenv('OLLAMA_API_KEY', 'ollama')
                 ))
+
+    def reset_chat_history(self):
+        self.chat_history = ChatHistory()
 
     def get_response(self, question: str, context: str = None, response_model: object =None) -> str:
         """
@@ -145,9 +149,8 @@ class StructuredLangModel:
             model=self.model,
             messages=messages,
             response_model= response_model,
-            options={'temperature': 0}
         )
-        self.chat_history.enqueue(response['message'])
+        self.chat_history.enqueue(response)
 
-        return response.model_dump_json(indent=2)
+        return response
 
