@@ -1,3 +1,4 @@
+import instructor
 from openai import OpenAI
 from ollama import Client
 import ollama
@@ -112,3 +113,57 @@ class LangModel:
         self.chat_history.enqueue(response['message'])
 
         return response['message']['content']
+
+class StructuredLangModel:
+    """
+    Interface to interact with language models using structured query models
+    """
+
+    def __init__(self, model: str = 'gpt-4o'):
+        if 'gpt' in model:
+            api_key = os.getenv('OPENAI_API_KEY')
+            self.llm = instructor.from_openai(OpenAI(api_key=api_key))
+        else:
+            self.llm = instructor.from_openai(
+                OpenAI(
+                    base_url=os.getenv('OLLAMA_HOST', 'http://localhost:11434'),
+                    api_key=os.getenv('OLLAMA_API_KEY', 'ollama')
+                ))
+
+    def get_response(self, question: str, context: str = None, response_model: object =None) -> str:
+        if 'gpt' in self.model:
+            return self.get_gpt_response(question, context,response_model)
+        else:
+            return self.get_ollama_response(question, context, response_model)
+
+    def get_gpt_response(self, question: str, context: str, response_model: object) -> str:
+        self.chat_history.enqueue({'role': 'user', 'content': context + '\n\n'+ question})
+        messages=[{'role': 'system', 'content': context}] + self.chat_history.get_all()
+
+        response = self.llm.chat.completions.create(model=self.model,
+                                                    messages=messages,
+                                                    response_model=response_model,
+                                                    max_tokens=1000,
+                                                    temperature=0.1, top_p=1)
+        self.chat_history.enqueue(response['message'])
+        return response.model_dump_json(indent=2)
+
+    def get_ollama_response(self, question: str, context: str, response_model: object) -> str:
+        """
+        Get response from any Ollama supported model
+        :param question: question to ask
+        :param context: context to provide
+        :return: model's response
+        """
+        msg = {'role': 'user', 'content': context + '\n\n' + question}
+        self.chat_history.enqueue(msg)
+        messages = self.chat_history.get_all()
+        response = self.llm.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            response_model= response_model,
+            options={'temperature': 0}
+        )
+        self.chat_history.enqueue(response['message'])
+
+        return response.model_dump_json(indent=2)
