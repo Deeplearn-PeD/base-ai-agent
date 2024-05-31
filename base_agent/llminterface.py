@@ -128,10 +128,11 @@ class StructuredLangModel:
         else:
             self.llm = instructor.from_openai(
                 OpenAI(
-                    base_url=os.getenv('OLLAMA_HOST', 'http://127.0.0.1:11434'),
+                    base_url=os.getenv('OLLAMA_HOST', 'http://127.0.0.1:11434/v1'),
                     api_key=os.getenv('OLLAMA_API_KEY', 'ollama')
                 ),
-                mode=instructor.Mode.JSON
+                mode=instructor.Mode.JSON,
+                stream=False
             )
 
     def reset_chat_history(self):
