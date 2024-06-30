@@ -65,11 +65,12 @@ class LangModel:
         if 'gpt' in model:
             api_key = os.getenv('OPENAI_API_KEY')
             self.llm = OpenAI(api_key=api_key)
+            self.available_models = self.llm.models.list()
         else:
             host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
             self.llm = Client(host=host)
+            self.available_models: List = self.llm.list()['models']
 
-        self.available_models: List = ollama.list()['models']
         self.model = model
         self.chat_history = ChatHistory()
         self._set_active_model(model)
@@ -78,10 +79,10 @@ class LangModel:
         self.chat_history = ChatHistory()
 
     def _set_active_model(self, model: str):
-        if model in [m['name'].split(':')[0] for m in self.available_models]:
-            self.model = model
-        elif 'gpt' in model:
+        if 'gpt' in model:
             self.model = 'gpt-4o'
+        elif model in [m['name'].split(':')[0] for m in self.available_models]:
+            self.model = model
         else:
             raise ValueError(
                 f"Model {model} not supported.\nAvailable models: {[m['name'] for m in self.available_models]}")
