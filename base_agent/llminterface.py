@@ -2,6 +2,7 @@ import instructor
 from openai import OpenAI
 from ollama import Client
 import ollama
+from pydantic import BaseModel
 import dotenv
 import os
 from collections import deque
@@ -96,8 +97,9 @@ class LangModel:
 
     def get_gpt_response(self, question: str, context: str) -> str:
         response = self.llm.chat.completions.create(model=self.model,
-            messages=[{'role': 'system', 'content': context}, {'role': 'user', 'content': question}], max_tokens=100,
-            temperature=0.1, top_p=1)
+                                                    messages=[{'role': 'system', 'content': context},
+                                                              {'role': 'user', 'content': question}], max_tokens=100,
+                                                    temperature=0.1, top_p=1)
         return response.choices[0].message.content
 
     def get_ollama_response(self, question: str, context: str) -> str:
@@ -115,12 +117,17 @@ class LangModel:
 
         return response['message']['content']
 
+
 class StructuredLangModel:
     """
     Interface to interact with language models using structured query models
     """
 
     def __init__(self, model: str = 'gpt-4o'):
+        """
+        Initialize the StructuredLangModel class with a language model.
+        :param model:  Large Language Model to use.
+        """
         self.model = model
         self.chat_history = ChatHistory()
         if 'gpt' in model:
@@ -137,13 +144,16 @@ class StructuredLangModel:
             )
 
     def reset_chat_history(self):
+        """
+        Reset the chat history.
+        """
         self.chat_history = ChatHistory()
 
-    def get_response(self, question: str, context: str = None, response_model: object =None) -> str:
+    def get_response(self, question: str, context: str = None, response_model: BaseModel = None) -> str:
         """
         Get response from any supported model
         :param question: question to ask
-        :param context: context to provide
+        :param context: question context to provide
         :return: model's response in JSON format
         """
         msg = {'role': 'user', 'content': context + '\n\n' + question}
@@ -152,9 +162,8 @@ class StructuredLangModel:
         response = self.llm.chat.completions.create(
             model=self.model,
             messages=messages,
-            response_model= response_model,
+            response_model=response_model,
         )
         self.chat_history.enqueue(response)
 
         return response
-

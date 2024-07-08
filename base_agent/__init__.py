@@ -3,7 +3,7 @@ import yaml
 
 
 class BasePersona:
-    def __init__(self, name: str='Libby D. Bot', model: str='gpt-4-0125-preview',  languages=['pt_BR','en'], ):
+    def __init__(self, name: str='Libby D. Bot', model: str='gpt-4o',  languages=['pt_BR','en'], ):
         self.name = name
         self.languages = languages
         self.active_language = languages[0]
