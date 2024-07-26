@@ -14,11 +14,12 @@ dotenv.load_dotenv()
 class ChatHistory:
     """
     The ChatHistory class is a FIFO queue that keeps track of chat history.
+    This is a non-persistent memory that will last only for a chat session..
     Attributes:
         queue (collections.deque): A deque object that stores the chat history.
     """
 
-    def __init__(self, max_size=1000):
+    def __init__(self, max_size=1000, session_id=None):
         """
         Initialize the ChatHistory class with a maximum size.
 
@@ -96,10 +97,15 @@ class LangModel:
             return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str) -> str:
+        msg = {'role': 'user', 'content':  question}
+        self.chat_history.enqueue(msg)
+        history = self.chat_history.get_all()
         response = self.llm.chat.completions.create(model=self.model,
-                                                    messages=[{'role': 'system', 'content': context},
-                                                              {'role': 'user', 'content': question}], max_tokens=100,
+                                                    messages=[{'role': 'system', 'content': context}]+history,
+                                                    max_tokens=1000,
                                                     temperature=0.1, top_p=1)
+        resp_msg ={'role':'assistant', 'content': response.choices[0].message.content}
+        self.chat_history.enqueue(resp_msg)
         return response.choices[0].message.content
 
     def get_ollama_response(self, question: str, context: str) -> str:
