@@ -88,7 +88,7 @@ class LangModel:
         else:
             raise ValueError(
                 f"Model {model} not supported.\nAvailable models: {[m['name'] for m in self.available_models]}")
-            self.model = "llama3"
+            self.model = "llama3.1"
 
     def get_response(self, question: str, context: str = None) -> str:
         if 'gpt' in self.model:

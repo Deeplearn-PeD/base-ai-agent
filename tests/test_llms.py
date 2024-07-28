@@ -12,19 +12,19 @@ class TestLangModel(unittest.TestCase):
     @patch('base_agent.llminterface.ollama')
     def test_init_with_gpt_model(self, mock_ollama, mock_client, mock_openai):
         mock_ollama.list.return_value = {'models': [{'name': 'gpt-4-turbo'}]}
-        LangModel('gpt-4-turbo')
+        LangModel('gpt-4o')
         mock_openai.assert_called_once()
 
     def test_init_with_non_gpt_model(self):
 
-        LangModel('llama3')
+        LangModel('llama3.1')
 
 
     @patch('base_agent.llminterface.OpenAI')
     @patch('base_agent.llminterface.Client')
     @patch('base_agent.llminterface.ollama')
     def test_init_with_unsupported_model(self, mock_ollama, mock_client, mock_openai):
-        mock_ollama.list.return_value = {'models': [{'name': 'llama3'}]}
+        mock_ollama.list.return_value = {'models': [{'name': 'llama3.1'}]}
         with self.assertRaises(ValueError):
             LangModel('unsupported_model')
 
@@ -71,7 +71,7 @@ class TestStructuredLangModel_GPT(unittest.TestCase):
         self.assertIsInstance(response, Character)
         self.assertEqual('Harry Potter', response.name)
     def test_get_strutured_output_ollama(self):
-        slm = StructuredLangModel('llama3')
+        slm = StructuredLangModel('llama3.1')
         response = slm.get_response('Tell me about Harry Potter', '', response_model=Character)
         expected = """
 {

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "base-ai-agent"
-version = "0.2.0"
+version = "0.2.1"
 description = "Base class for all of Deeplearn's  AI agents."
 authors = ["Flávio Codeço Coelho <fccoelho@gmail.com>"]
 license = "GPLv3"
