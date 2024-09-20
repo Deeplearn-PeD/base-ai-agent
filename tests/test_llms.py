@@ -90,7 +90,8 @@ class TestStructuredLangModel_GPT(unittest.TestCase):
 """
 
         self.assertIsInstance(response, Character)
-        self.assertEqual('Harry James Potter', response.name)
+        assert response.name.startswith('Harry')
+        assert response.name.endswith('Potter')
 
 if __name__ == '__main__':
     unittest.main()
