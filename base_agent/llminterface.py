@@ -155,11 +155,13 @@ class StructuredLangModel:
         """
         self.chat_history = ChatHistory()
 
-    def get_response(self, question: str, context: str = None, response_model: BaseModel = None) -> str:
+    def get_response(self, question: str, context: str = "", response_model: BaseModel = None) -> str:
         """
         Get response from any supported model
+
         :param question: question to ask
         :param context: question context to provide
+        :param response_model: response model to use
         :return: model's response in JSON format
         """
         msg = {'role': 'user', 'content': context + '\n\n' + question}
