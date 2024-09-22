@@ -171,6 +171,7 @@ class StructuredLangModel:
             model=self.model,
             messages=messages,
             response_model=response_model,
+            max_retries=3
         )
         self.chat_history.enqueue(response)
 
