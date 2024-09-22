@@ -129,12 +129,14 @@ class StructuredLangModel:
     Interface to interact with language models using structured query models
     """
 
-    def __init__(self, model: str = 'gpt-4o'):
+    def __init__(self, model: str = 'gpt-4o', retries=3):
         """
         Initialize the StructuredLangModel class with a language model.
         :param model:  Large Language Model to use.
+        :param retries: Number of retries to attempt.
         """
         self.model = model
+        self.retries = retries
         self.chat_history = ChatHistory()
         if 'gpt' in model:
             api_key = os.getenv('OPENAI_API_KEY')
@@ -171,7 +173,7 @@ class StructuredLangModel:
             model=self.model,
             messages=messages,
             response_model=response_model,
-            max_retries=3
+            max_retries=self.retries
         )
         self.chat_history.enqueue(response)
 
