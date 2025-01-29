@@ -16,7 +16,7 @@ class TestLangModel(unittest.TestCase):
         mock_openai.assert_called_once()
 
     def test_init_with_non_gpt_model(self):
-        LangModel(model='deepseek', provider='deepseek')
+        LangModel(model='deepseek-chat', provider='deepseek')
 
 
     @patch('base_agent.llminterface.OpenAI')

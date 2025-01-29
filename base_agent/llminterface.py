@@ -92,7 +92,7 @@ class LangModel:
         if provider == 'openai':
             self.llm = OpenAI(api_key=self.openai_api_key)
         elif provider == 'deepseek':
-            self.llm = OpenAI(api_key=self.deepseek_api_key, base_url='https://api.deepseek.com')
+            self.llm = OpenAI(api_key=self.deepseek_api_key, base_url='https://api.deepseek.com/v1')
         elif provider == 'anthropic':
             self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
         else:
@@ -105,7 +105,7 @@ class LangModel:
          Get available models from the language model provider
         """
         if not self.llm:
-            self._setup_llm_client()
+            self._setup_llm_client(provider=self.provider)
         models = []
         if self.openai_api_key:
             models.extend([m.id for m in self.llm.models.list().data])
@@ -120,7 +120,7 @@ class LangModel:
 
         return models
 
-    def _set_active_model(self, model: str):
+    def _set_active_model(self, model: str, provider='openai'):
         available_model_names = self.available_models#[m['name'].split(':')[0] for m in self.available_models]
         if 'gpt' in model:
             self.model = 'gpt-4o'
@@ -141,7 +141,7 @@ class LangModel:
         Returns: str: model's response
         """
         if not self.llm:
-            self._setup_llm_client()
+            self._setup_llm_client(provider=self.provider)
         if 'gpt' in self.model:
             return self.get_gpt_response(question, context)
         else:
