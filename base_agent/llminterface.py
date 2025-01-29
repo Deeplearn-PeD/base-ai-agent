@@ -2,6 +2,7 @@ import instructor
 from openai import OpenAI
 from ollama import Client
 import ollama
+import anthropic
 from pydantic import BaseModel
 import dotenv
 import os
@@ -48,6 +49,10 @@ class ChatHistory:
             return None
         return self.queue.popleft()
 
+    def _manage_chat_history(self, message: dict, response: dict):
+        self.chat_history.enqueue(message)
+        self.chat_history.enqueue(response)
+
     def get_all(self):
         """
         Return all items in the queue as a list without removing them from the queue.
@@ -63,34 +68,80 @@ class LangModel:
     Interface to interact with language models
     """
 
-    def __init__(self, model: str = 'gpt-4o'):
-        if 'gpt' in model:
-            api_key = os.getenv('OPENAI_API_KEY')
-            self.llm = OpenAI(api_key=api_key)
-            self.available_models = self.llm.models.list()
+    def __init__(self, model: str = 'gpt-4o', provider='openai'):
+        self.openai_api_key = os.getenv('OPENAI_API_KEY')
+        if 'DEEPSEEK_API_KEY' in os.environ:
+            self.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
         else:
-            host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
-            self.llm = Client(host=host)
-            self.available_models: List = self.llm.list()['models']
+            self.deepseek_api_key = None
+        if 'ANTHROPIC_API_KEY' in os.environ:
+            self.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+        else:
+            self.anthropic_api_key = None
+        self.llm = None
 
         self.model = model
+        self.provider = provider
         self.chat_history = ChatHistory()
         self._set_active_model(model)
 
     def reset_chat_history(self):
         self.chat_history = ChatHistory()
 
+    def _setup_llm_client(self, provider='openai'):
+        if provider == 'openai':
+            self.llm = OpenAI(api_key=self.openai_api_key)
+        elif provider == 'deepseek':
+            self.llm = OpenAI(api_key=self.deepseek_api_key, base_url='https://api.deepseek.com')
+        elif provider == 'anthropic':
+            self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
+        else:
+            host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+            self.llm = Client(host=host)
+
+    @property
+    def available_models(self):
+        """
+         Get available models from the language model provider
+        """
+        if not self.llm:
+            self._setup_llm_client()
+        models = []
+        if self.openai_api_key:
+            models.extend([m.id for m in self.llm.models.list().data])
+        if self.deepseek_api_key:
+            models.extend([m.id for m in self.llm.models.list().data])
+        if self.anthropic_api_key:
+            models.extend([m.id for m in self.llm.models.list().data])
+        # Ollama models
+        host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+        llm = Client(host=host)
+        models.extend([m['name'].split(':')[0] for m in llm.list()['models']])
+
+        return models
+
     def _set_active_model(self, model: str):
+        available_model_names = self.available_models#[m['name'].split(':')[0] for m in self.available_models]
         if 'gpt' in model:
             self.model = 'gpt-4o'
-        elif model in [m['name'].split(':')[0] for m in self.available_models]:
+        elif model in available_model_names:
             self.model = model
         else:
             raise ValueError(
-                f"Model {model} not supported.\nAvailable models: {[m['name'] for m in self.available_models]}")
-            self.model = "llama3.1"
+                f"Model {model} not supported.\nAvailable models: {[m for m in self.available_models]}")
+            self.model = "llama3.2"
 
     def get_response(self, question: str, context: str = None) -> str:
+        """
+        Get response from any supported model
+        Args:
+            question: str: question to ask
+            context: str: question context to provide
+
+        Returns: str: model's response
+        """
+        if not self.llm:
+            self._setup_llm_client()
         if 'gpt' in self.model:
             return self.get_gpt_response(question, context)
         else:

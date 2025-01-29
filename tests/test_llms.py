@@ -16,8 +16,7 @@ class TestLangModel(unittest.TestCase):
         mock_openai.assert_called_once()
 
     def test_init_with_non_gpt_model(self):
-
-        LangModel('llama3.1')
+        LangModel(model='deepseek', provider='deepseek')
 
 
     @patch('base_agent.llminterface.OpenAI')
@@ -36,8 +35,8 @@ class TestLangModel(unittest.TestCase):
 
 
     @patch('base_agent.llminterface.LangModel.get_ollama_response')
-    def test_get_response_with_codegemma_model(self, mock_get_ollama_response):
-        lm = LangModel('codegemma')
+    def test_get_response_with_llama_model(self, mock_get_ollama_response):
+        lm = LangModel('llama3.2')
         lm.get_response('question', 'context')
         mock_get_ollama_response.assert_called_once_with('question', 'context')
 
