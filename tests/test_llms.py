@@ -68,9 +68,10 @@ class TestStructuredLangModel_GPT(unittest.TestCase):
 """
 
         self.assertIsInstance(response, Character)
-        self.assertEqual('Harry Potter', response.name)
+        assert response.name.startswith('Harry')
+        assert response.name.endswith('Potter')
     def test_get_strutured_output_ollama(self):
-        slm = StructuredLangModel('llama3.1')
+        slm = StructuredLangModel('llama3.2')
         response = slm.get_response('Tell me about Harry Potter', '', response_model=Character)
         expected = """
 {

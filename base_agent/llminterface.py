@@ -63,7 +63,7 @@ class ChatHistory:
         return list(self.queue)
 
 
-class BaseLangModel:
+class LangModel:
     """
     Base class for language model interfaces
     """
@@ -176,7 +176,7 @@ class BaseLangModel:
         return response['message']['content']
 
 
-class StructuredLangModel(BaseLangModel):
+class StructuredLangModel(LangModel):
     """
     Interface to interact with language models using structured query models
     """
