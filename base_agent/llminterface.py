@@ -63,11 +63,11 @@ class ChatHistory:
         return list(self.queue)
 
 
-class LangModel:
+class BaseLangModel:
     """
-    Interface to interact with language models
+    Base class for language model interfaces
     """
-
+    
     def __init__(self, model: str = 'gpt-4o', provider='openai'):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if 'DEEPSEEK_API_KEY' in os.environ:
@@ -79,16 +79,17 @@ class LangModel:
         else:
             self.anthropic_api_key = None
         self.llm = None
-
         self.model = model
         self.provider = provider
         self.chat_history = ChatHistory()
         self._set_active_model(model)
 
     def reset_chat_history(self):
+        """Reset the chat history"""
         self.chat_history = ChatHistory()
 
     def _setup_llm_client(self, provider='openai'):
+        """Setup the LLM client for the specified provider"""
         if provider == 'openai':
             self.llm = OpenAI(api_key=self.openai_api_key)
         elif provider == 'deepseek':
@@ -175,7 +176,7 @@ class LangModel:
         return response['message']['content']
 
 
-class StructuredLangModel:
+class StructuredLangModel(BaseLangModel):
     """
     Interface to interact with language models using structured query models
     """
@@ -186,9 +187,8 @@ class StructuredLangModel:
         :param model:  Large Language Model to use.
         :param retries: Number of retries to attempt.
         """
-        self.model = model
+        super().__init__(model)
         self.retries = retries
-        self.chat_history = ChatHistory()
         if 'gpt' in model:
             api_key = os.getenv('OPENAI_API_KEY')
             self.llm = instructor.from_openai(OpenAI(api_key=api_key))
