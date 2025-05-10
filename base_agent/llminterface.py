@@ -154,7 +154,7 @@ class LangModel:
         msg = {'role': 'user', 'content':  question}
         self.chat_history.enqueue(msg)
         history = self.chat_history.get_all()
-        response = self.llm.chat.completions.create(model=self.model,
+        response = self.llm.chat(model=self.model,
                                                     messages=[{'role': 'system', 'content': context}]+history,
                                                     max_tokens=1000,
                                                     temperature=0.1, top_p=1)
