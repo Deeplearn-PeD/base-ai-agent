@@ -1,13 +1,12 @@
-import instructor
-from openai import OpenAI
-from ollama import Client
-import ollama
-import anthropic
-from pydantic import BaseModel
-import dotenv
 import os
 from collections import deque
-from typing import List, Dict
+
+import anthropic
+import dotenv
+import instructor
+from ollama import Client
+from openai import OpenAI
+from pydantic import BaseModel
 
 dotenv.load_dotenv()
 
@@ -67,7 +66,7 @@ class LangModel:
     """
     Base class for language model interfaces
     """
-    
+
     def __init__(self, model: str = 'gpt-4o', provider=''):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if 'DEEPSEEK_API_KEY' in os.environ:
@@ -124,7 +123,7 @@ class LangModel:
         return models
 
     def _set_active_model(self, model: str, provider='openai'):
-        available_model_names = self.available_models#[m['name'].split(':')[0] for m in self.available_models]
+        available_model_names = self.available_models  # [m['name'].split(':')[0] for m in self.available_models]
         if 'gpt' in model:
             self.model = 'gpt-4o'
         elif model in available_model_names:
@@ -151,14 +150,16 @@ class LangModel:
             return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str) -> str:
-        msg = {'role': 'user', 'content':  question}
+        msg = {'role': 'user', 'content': question}
         self.chat_history.enqueue(msg)
         history = self.chat_history.get_all()
         response = self.llm.chat(model=self.model,
-                                                    messages=[{'role': 'system', 'content': context}]+history,
-                                                    max_tokens=1000,
-                                                    temperature=0.1, top_p=1)
-        resp_msg ={'role':'assistant', 'content': response.choices[0].message.content}
+                                 messages=[{'role': 'system', 'content': context}] + history,
+                                 # max_tokens=1000,
+                                 # temperature=0.1,
+                                 # top_p=1
+                                 )
+        resp_msg = {'role': 'assistant', 'content': response.choices[0].message.content}
         self.chat_history.enqueue(resp_msg)
         return response.choices[0].message.content
 
