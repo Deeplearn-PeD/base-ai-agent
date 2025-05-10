@@ -12,7 +12,7 @@ class TestLangModel(unittest.TestCase):
     @patch('base_agent.llminterface.ollama')
     def test_init_with_gpt_model(self, mock_ollama, mock_client, mock_openai):
         mock_ollama.list.return_value = {'models': [{'name': 'gpt-4-turbo'}]}
-        LangModel('gpt-4o')
+        LangModel('gpt-4o', provider='openai')
         mock_openai.assert_called_once()
 
     def test_init_with_non_gpt_model(self):

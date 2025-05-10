@@ -68,7 +68,7 @@ class LangModel:
     Base class for language model interfaces
     """
     
-    def __init__(self, model: str = 'gpt-4o', provider='openai'):
+    def __init__(self, model: str = 'gpt-4o', provider=''):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if 'DEEPSEEK_API_KEY' in os.environ:
             self.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
@@ -97,6 +97,7 @@ class LangModel:
         elif provider == 'anthropic':
             self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
         else:
+            self.provider = 'ollama'
             host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
             self.llm = Client(host=host)
 
@@ -108,16 +109,17 @@ class LangModel:
         if not self.llm:
             self._setup_llm_client(provider=self.provider)
         models = []
-        if self.openai_api_key:
+        if self.openai_api_key and self.provider == 'openai':
             models.extend([m.id for m in self.llm.models.list().data])
-        if self.deepseek_api_key:
+        if self.deepseek_api_key and self.provider == 'deepseek':
             models.extend([m.id for m in self.llm.models.list().data])
-        if self.anthropic_api_key:
+        if self.anthropic_api_key and self.provider == 'anthropic':
             models.extend([m.id for m in self.llm.models.list().data])
         # Ollama models
         host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
         llm = Client(host=host)
         models.extend([m['name'].split(':')[0] for m in llm.list()['models']])
+        models.sort()
 
         return models
 
