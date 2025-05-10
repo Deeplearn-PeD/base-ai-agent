@@ -10,7 +10,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<3.13"
+python = ">=3.12,<3.14"
 loguru = "^0.7.2"
 PyYAML = "^6.0.1"
 openai = "^1.16.0"
@@ -31,7 +31,7 @@ openai-whisper = "^20231117"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.1.1"
 pytest-cov = "^5.0.0"
-aider-chat = "^0.72.3"
+#aider-chat = "*"
 
 [build-system]
 requires = ["poetry-core"]
