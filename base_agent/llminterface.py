@@ -77,6 +77,10 @@ class LangModel:
             self.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
         else:
             self.anthropic_api_key = None
+        if 'GEMINI_API_KEY' in os.environ:
+            self.gemini_api_key = os.getenv('GEMINI_API_KEY')
+        else:
+            self.gemini_api_key = None
         self.llm = None
         self.model = model
         self.provider = provider
@@ -95,6 +99,8 @@ class LangModel:
             self.llm = OpenAI(api_key=self.deepseek_api_key, base_url='https://api.deepseek.com/v1')
         elif provider == 'anthropic':
             self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
+        elif provider == 'google':
+            self.llm = OpenAI(api_key=self.gemini_api_key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
         else:
             self.provider = 'ollama'
             host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
