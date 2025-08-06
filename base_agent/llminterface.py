@@ -120,6 +120,8 @@ class LangModel:
             models.extend([m.id for m in self.llm.models.list().data])
         if self.anthropic_api_key and self.provider == 'anthropic':
             models.extend([m.id for m in self.llm.models.list().data])
+        if self.gemini_api_key and self.provider == 'google':
+            models.extend([m.id for m in self.llm.models.list().data])
         # Ollama models
         host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
         llm = Client(host=host)
@@ -132,6 +134,8 @@ class LangModel:
         available_model_names = self.available_models  # [m['name'].split(':')[0] for m in self.available_models]
         if 'gpt' in model:
             self.model = 'gpt-4o'
+        if 'gemini' in model:
+            self.model = 'gemini-2.5-flash'
         elif model in available_model_names:
             self.model = model
         else:
@@ -150,7 +154,7 @@ class LangModel:
         """
         if not self.llm:
             self._setup_llm_client(provider=self.provider)
-        if 'gpt' in self.model:
+        if 'gpt' in self.model or 'gemini' in self.model:
             return self.get_gpt_response(question, context)
         else:
             return self.get_ollama_response(question, context)
@@ -159,7 +163,7 @@ class LangModel:
         msg = {'role': 'user', 'content': question}
         self.chat_history.enqueue(msg)
         history = self.chat_history.get_all()
-        response = self.llm.chat(model=self.model,
+        response = self.llm.chat.completions.create(model=self.model,
                                  messages=[{'role': 'system', 'content': context}] + history,
                                  # max_tokens=1000,
                                  # temperature=0.1,

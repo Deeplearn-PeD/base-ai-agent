@@ -11,7 +11,7 @@ class TestLangModel(unittest.TestCase):
     @patch('base_agent.llminterface.Client')
     @patch('base_agent.llminterface.ollama')
     def test_init_with_gpt_model(self, mock_ollama, mock_client, mock_openai):
-        mock_ollama.list.return_value = {'models': [{'name': 'gpt-4-turbo'}]}
+        mock_ollama.list.return_value = {'models': [{'name': 'gpt-4o'}]}
         LangModel('gpt-4o', provider='openai')
         mock_openai.assert_called_once()
 
@@ -40,6 +40,10 @@ class TestLangModel(unittest.TestCase):
         lm.get_response('question', 'context')
         mock_get_ollama_response.assert_called_once_with('question', 'context')
 
+    def test_get_response_with_gemini_model(self):
+        lm = LangModel('gemini', provider='google')
+
+        lm.get_response('question', 'context')
 
 class Character(BaseModel):
     name: str
