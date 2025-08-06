@@ -197,13 +197,14 @@ class StructuredLangModel(LangModel):
     Interface to interact with language models using structured query models
     """
 
-    def __init__(self, model: str = 'gpt-4o', retries=3):
+    def __init__(self, model: str = 'gpt-4o', provider: str = 'openai', retries=3):
         """
         Initialize the StructuredLangModel class with a language model.
         :param model:  Large Language Model to use.
+        :param provider: Provider of the language model, e.g., 'openai', 'ollama', etc.
         :param retries: Number of retries to attempt.
         """
-        super().__init__(model)
+        super().__init__(model, provider=provider)
         self.retries = retries
         if 'gpt' in model:
             api_key = os.getenv('OPENAI_API_KEY')
