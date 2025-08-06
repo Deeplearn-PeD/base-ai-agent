@@ -123,9 +123,12 @@ class LangModel:
         if self.gemini_api_key and self.provider == 'google':
             models.extend([m.id for m in self.llm.models.list().data])
         # Ollama models
-        host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
-        llm = Client(host=host)
-        models.extend([m['name'].split(':')[0] for m in llm.list()['models']])
+        try:
+            host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+            llm = Client(host=host)
+            models.extend([m['name'].split(':')[0] for m in llm.list()['models']])
+        except Exception as e:
+            print(f"Error: {e}, unable to fetch Ollama models. ")
         models.sort()
 
         return models
