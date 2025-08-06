@@ -85,7 +85,7 @@ class LangModel:
         self.model = model
         self.provider = provider
         self.chat_history = ChatHistory()
-        self._set_active_model(model)
+        self._set_active_model(model, provider)
 
     def reset_chat_history(self):
         """Reset the chat history"""
