@@ -77,8 +77,8 @@ class LangModel:
             self.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
         else:
             self.anthropic_api_key = None
-        if 'GEMINI_API_KEY' in os.environ:
-            self.gemini_api_key = os.getenv('GEMINI_API_KEY')
+        if 'GOOGLE_API_KEY' in os.environ:
+            self.gemini_api_key = os.getenv('GOOGLE_API_KEY')
         else:
             self.gemini_api_key = None
         self.llm = None
