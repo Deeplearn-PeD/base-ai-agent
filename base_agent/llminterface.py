@@ -67,7 +67,7 @@ class LangModel:
     Base class for language model interfaces
     """
 
-    def __init__(self, model: str = 'gpt-4o', provider=''):
+    def __init__(self, model: str = 'gpt-4o', provider='google'):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if 'DEEPSEEK_API_KEY' in os.environ:
             self.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
@@ -93,6 +93,7 @@ class LangModel:
 
     def _setup_llm_client(self, provider='openai'):
         """Setup the LLM client for the specified provider"""
+        self.provider =  provider
         if provider == 'openai':
             self.llm = OpenAI(api_key=self.openai_api_key)
         elif provider == 'deepseek':
@@ -101,8 +102,7 @@ class LangModel:
             self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
         elif provider == 'google':
             self.llm = OpenAI(api_key=self.gemini_api_key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
-        else:
-            self.provider = 'ollama'
+        elif provider == 'ollama':
             host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
             self.llm = Client(host=host)
 
