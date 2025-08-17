@@ -9,7 +9,7 @@ import json
 class TestLangModel(unittest.TestCase):
     @patch('base_agent.llminterface.OpenAI')
     @patch('base_agent.llminterface.Client')
-    @patch('base_agent.llminterface.ollama')
+    # @patch('base_agent.llminterface.ollama')
     def test_init_with_gpt_model(self, mock_ollama, mock_client, mock_openai):
         mock_ollama.list.return_value = {'models': [{'name': 'gpt-4o'}]}
         LangModel('gpt-4o', provider='openai')
@@ -21,7 +21,7 @@ class TestLangModel(unittest.TestCase):
 
     @patch('base_agent.llminterface.OpenAI')
     @patch('base_agent.llminterface.Client')
-    @patch('base_agent.llminterface.ollama')
+    # @patch('base_agent.llminterface.ollama')
     def test_init_with_unsupported_model(self, mock_ollama, mock_client, mock_openai):
         mock_ollama.list.return_value = {'models': [{'name': 'llama3.1'}]}
         with self.assertRaises(ValueError):
