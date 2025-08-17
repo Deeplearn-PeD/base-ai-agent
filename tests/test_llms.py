@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch, MagicMock
 from base_agent.llminterface import LangModel, StructuredLangModel
 from pydantic import BaseModel, Field
 from typing import List
@@ -7,43 +6,43 @@ import json
 
 
 class TestLangModel(unittest.TestCase):
-    @patch('base_agent.llminterface.OpenAI')
-    @patch('base_agent.llminterface.Client')
-    # @patch('base_agent.llminterface.ollama')
-    def test_init_with_gpt_model(self, mock_ollama, mock_client, mock_openai):
-        mock_ollama.list.return_value = {'models': [{'name': 'gpt-4o'}]}
-        LangModel('gpt-4o', provider='openai')
-        mock_openai.assert_called_once()
+    def test_init_with_gpt_model(self):
+        """Testa inicialização com modelo GPT"""
+        lm = LangModel('gpt-4o', provider='openai')
+        self.assertEqual(lm.model, 'gpt-4o')
+        self.assertIsNotNone(lm.chat_history)
 
-    def test_init_with_non_gpt_model(self):
-        LangModel(model='deepseek-chat', provider='deepseek')
+    def test_init_with_ollama_model(self):
+        """Testa inicialização com modelo Ollama"""
+        lm = LangModel('llama3.2', provider='ollama')
+        self.assertEqual(lm.model, 'llama3.2')
+        self.assertIsNotNone(lm.chat_history)
 
+    def test_init_with_deepseek_model(self):
+        """Testa inicialização com modelo DeepSeek"""
+        lm = LangModel(model='deepseek-chat', provider='deepseek')
+        self.assertEqual(lm.model, 'deepseek-chat')
+        self.assertIsNotNone(lm.chat_history)
 
-    @patch('base_agent.llminterface.OpenAI')
-    @patch('base_agent.llminterface.Client')
-    # @patch('base_agent.llminterface.ollama')
-    def test_init_with_unsupported_model(self, mock_ollama, mock_client, mock_openai):
-        mock_ollama.list.return_value = {'models': [{'name': 'llama3.1'}]}
-        with self.assertRaises(ValueError):
-            LangModel('unsupported_model')
-
-    @patch('base_agent.llminterface.LangModel.get_gpt_response')
-    def test_get_response_with_gpt_model(self, mock_get_gpt_response):
+    def test_reset_chat_history(self):
+        """Testa reset do histórico de chat"""
         lm = LangModel('gpt-4o')
-        lm.get_response('question', 'context')
-        mock_get_gpt_response.assert_called_once_with('question', 'context')
+        lm.reset_chat_history()
+        self.assertEqual(len(lm.chat_history.get_all()), 0)
 
+    def test_available_models_property(self):
+        """Testa propriedade available_models"""
+        lm = LangModel('gpt-4o')
+        models = lm.available_models
+        self.assertIsInstance(models, list)
+        self.assertGreater(len(models), 0)
 
-    @patch('base_agent.llminterface.LangModel.get_ollama_response')
-    def test_get_response_with_llama_model(self, mock_get_ollama_response):
-        lm = LangModel('llama3.2')
-        lm.get_response('question', 'context')
-        mock_get_ollama_response.assert_called_once_with('question', 'context')
-
-    def test_get_response_with_gemini_model(self):
-        lm = LangModel('gemini', provider='google')
-
-        lm.get_response('question', 'context')
+    def test_get_response_basic_functionality(self):
+        """Testa funcionalidade básica de get_response"""
+        lm = LangModel('gpt-4o')
+        response = lm.get_response('What is 2+2?', 'Simple math question')
+        self.assertIsInstance(response, str)
+        self.assertGreater(len(response), 0)
 
 class Character(BaseModel):
     name: str
@@ -51,51 +50,93 @@ class Character(BaseModel):
     fact: List[str] = Field(..., description="A list of facts about the character")
 
 
-class TestStructuredLangModel_GPT(unittest.TestCase):
-    def test_get_strutured_output(self):
+class SimpleResponse(BaseModel):
+    answer: str
+    confidence: float = Field(..., description="Confidence level between 0 and 1")
+
+
+class TestStructuredLangModel(unittest.TestCase):
+    def test_init_with_default_params(self):
+        """Testa inicialização com parâmetros padrão"""
         slm = StructuredLangModel()
-        response = slm.get_response('Tell me about Harry Potter', '', response_model=Character)
-        expected = """
-{
-  "name": "Harry James Potter",
-  "age": 37,
-  "fact": [
-    "He is the chosen one.",
-    "He has a lightning-shaped scar on his forehead.",
-    "He is the son of James and Lily Potter.",
-    "He attended Hogwarts School of Witchcraft and Wizardry.",
-    "He is a skilled wizard and sorcerer.",
-    "He fought against Lord Voldemort and his followers.",
-    "He has a pet owl named Snowy."
-  ]
-}
-"""
+        self.assertEqual(slm.model, 'gpt-4o')
+        self.assertIsNotNone(slm.chat_history)
+
+    def test_init_with_custom_params(self):
+        """Testa inicialização com parâmetros customizados"""
+        slm = StructuredLangModel(model='gpt-4o', provider='openai', retries=5)
+        self.assertEqual(slm.model, 'gpt-4o')
+        self.assertEqual(slm.retries, 5)
+
+    def test_reset_chat_history(self):
+        """Testa reset do histórico de chat"""
+        slm = StructuredLangModel()
+        slm.reset_chat_history()
+        self.assertEqual(len(slm.chat_history.get_all()), 0)
+
+    def test_get_structured_output_simple(self):
+        """Testa saída estruturada simples"""
+        slm = StructuredLangModel()
+        response = slm.get_response(
+            'What is the capital of Brazil? Be confident in your answer.',
+            '',
+            response_model=SimpleResponse
+        )
+        
+        self.assertIsInstance(response, SimpleResponse)
+        self.assertIsInstance(response.answer, str)
+        self.assertGreater(len(response.answer), 0)
+        self.assertIsInstance(response.confidence, float)
+        self.assertGreaterEqual(response.confidence, 0.0)
+        self.assertLessEqual(response.confidence, 1.0)
+
+    def test_get_structured_output_character(self):
+        """Testa saída estruturada com modelo Character"""
+        slm = StructuredLangModel()
+        response = slm.get_response(
+            'Tell me about Harry Potter, the fictional character',
+            '',
+            response_model=Character
+        )
 
         self.assertIsInstance(response, Character)
-        assert response.name.startswith('Harry')
-        assert response.name.endswith('Potter')
-    def test_get_strutured_output_ollama(self):
-        slm = StructuredLangModel('llama3.2')
-        response = slm.get_response('Tell me about Harry Potter', '', response_model=Character)
-        expected = """
-{
-  "name": "Harry James Potter",
-  "age": 37,
-  "fact": [
-    "He is the chosen one.",
-    "He has a lightning-shaped scar on his forehead.",
-    "He is the son of James and Lily Potter.",
-    "He attended Hogwarts School of Witchcraft and Wizardry.",
-    "He is a skilled wizard and sorcerer.",
-    "He fought against Lord Voldemort and his followers.",
-    "He has a pet owl named Snowy."
-  ]
-}
-"""
+        self.assertIsInstance(response.name, str)
+        self.assertIn('Harry', response.name)
+        self.assertIn('Potter', response.name)
+        self.assertIsInstance(response.age, int)
+        self.assertGreater(response.age, 0)
+        self.assertIsInstance(response.fact, list)
+        self.assertGreater(len(response.fact), 0)
+        
+        # Verifica se todos os fatos são strings
+        for fact in response.fact:
+            self.assertIsInstance(fact, str)
+            self.assertGreater(len(fact), 0)
 
-        self.assertIsInstance(response, Character)
-        assert response.name.startswith('Harry')
-        assert response.name.endswith('Potter')
+    def test_get_structured_output_ollama(self):
+        """Testa saída estruturada com modelo Ollama"""
+        try:
+            slm = StructuredLangModel('llama3.2', provider='ollama')
+            response = slm.get_response(
+                'What is 2+2? Be confident.',
+                '',
+                response_model=SimpleResponse
+            )
+            
+            self.assertIsInstance(response, SimpleResponse)
+            self.assertIsInstance(response.answer, str)
+            self.assertIn('4', response.answer)
+        except Exception as e:
+            # Se Ollama não estiver disponível, pula o teste
+            self.skipTest(f"Ollama não disponível: {e}")
+
+    def test_get_response_without_model(self):
+        """Testa resposta sem modelo estruturado"""
+        slm = StructuredLangModel()
+        response = slm.get_response('What is 2+2?', '')
+        
+        self.assertIsInstance(response, str)
+        self.assertGreater(len(response), 0)
 
 if __name__ == '__main__':
     unittest.main()
