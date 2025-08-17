@@ -102,7 +102,7 @@ class LangModel:
             self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
         elif provider == 'google':
             self.llm = OpenAI(api_key=self.gemini_api_key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
-        elif provider == 'ollama':
+        elif provider == 'ollama' and ("OLLAMA_HOST" in os.environ):
             host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
             self.llm = Client(host=host)
 
@@ -123,12 +123,13 @@ class LangModel:
         if self.gemini_api_key and self.provider == 'google':
             models.extend([m.id for m in self.llm.models.list().data])
         # Ollama models
-        try:
-            host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
-            llm = Client(host=host)
-            models.extend([m['name'].split(':')[0] for m in llm.list()['models']])
-        except Exception as e:
-            print(f"Error: {e}, unable to fetch Ollama models. ")
+        if "OLLAMA_HOST" in os.environ:
+            try:
+                host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+                llm = Client(host=host)
+                models.extend([m['name'].split(':')[0] for m in llm.list()['models']])
+            except Exception as e:
+                print(f"Error: {e}, unable to fetch Ollama models. ")
         models.sort()
 
         return models
