@@ -243,6 +243,7 @@ class StructuredLangModel(LangModel):
             response_model=response_model,
             max_retries=self.retries
         )
-        self.chat_history.enqueue(response)
+        resp_msg = {'role': 'assistant', 'content': response.choices[0].message.content}
+        self.chat_history.enqueue(resp_msg)
 
-        return response
+        return resp_msg['content']

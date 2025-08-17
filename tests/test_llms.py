@@ -26,20 +26,20 @@ class TestLangModel(unittest.TestCase):
 
     def test_reset_chat_history(self):
         """Testa reset do histórico de chat"""
-        lm = LangModel('gpt-4o')
+        lm = LangModel('gpt-4o', provider='openai')
         lm.reset_chat_history()
         self.assertEqual(len(lm.chat_history.get_all()), 0)
 
     def test_available_models_property(self):
         """Testa propriedade available_models"""
-        lm = LangModel('gpt-4o')
+        lm = LangModel('qwen3', provider='ollama')
         models = lm.available_models
         self.assertIsInstance(models, list)
         self.assertGreater(len(models), 0)
 
     def test_get_response_basic_functionality(self):
         """Testa funcionalidade básica de get_response"""
-        lm = LangModel('gpt-4o')
+        lm = LangModel('gpt-4o', provider='openai')
         response = lm.get_response('What is 2+2?', 'Simple math question')
         self.assertIsInstance(response, str)
         self.assertGreater(len(response), 0)
@@ -136,7 +136,7 @@ class TestStructuredLangModel(unittest.TestCase):
         response = slm.get_response('What is 2+2?', '')
         
         self.assertIsInstance(response, str)
-        self.assertGreater(len(response), 0)
+        self.assertIn('4', response)
 
 if __name__ == '__main__':
     unittest.main()
