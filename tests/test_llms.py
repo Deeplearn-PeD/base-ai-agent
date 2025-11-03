@@ -14,8 +14,8 @@ class TestLangModel(unittest.TestCase):
 
     def test_init_with_ollama_model(self):
         """Testa inicialização com modelo Ollama"""
-        lm = LangModel('llama3.2', provider='ollama')
-        self.assertEqual(lm.model, 'llama3.2')
+        lm = LangModel('qwen3', provider='ollama')
+        self.assertEqual(lm.model, 'qwen3')
         self.assertIsNotNone(lm.chat_history)
 
     def test_init_with_deepseek_model(self):

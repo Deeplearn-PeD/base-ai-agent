@@ -10,6 +10,8 @@ openai:
 Google:
   gemma2:
     interface="ollama"
+  qwen3:
+      interface="ollama"
 
 
  # Language models supported
