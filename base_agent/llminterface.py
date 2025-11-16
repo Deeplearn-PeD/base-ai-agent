@@ -102,8 +102,8 @@ class LangModel:
             self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
         elif provider == 'google':
             self.llm = OpenAI(api_key=self.gemini_api_key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
-        elif provider == 'ollama' and ("OLLAMA_HOST" in os.environ):
-            host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+        elif provider == 'ollama' and ("OLLAMA_API_BASE" in os.environ):
+            host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
             self.llm = Client(host=host)
 
     @property
@@ -212,7 +212,7 @@ class StructuredLangModel(LangModel):
         else:
             self.llm = instructor.from_openai(
                 OpenAI(
-                    base_url=os.getenv('OLLAMA_HOST', 'http://127.0.0.1:11434/v1'),
+                    base_url=os.getenv('OLLAMA_API_BASE', 'http://127.0.0.1:11434/v1'),
                     api_key=os.getenv('OLLAMA_API_KEY', 'ollama')
                 ),
                 mode=instructor.Mode.JSON,
