@@ -135,7 +135,15 @@ class TestStructuredLangModel(unittest.TestCase):
         slm = StructuredLangModel()
         response = slm.get_response('What is 2+2?', '')
         
-        assert response
+        # When no response_model is provided, it returns a ChatCompletion object
+        # We need to extract the content from it
+        if hasattr(response, 'choices'):
+            content = response.choices[0].message.content
+            self.assertIsInstance(content, str)
+            self.assertGreater(len(content), 0)
+        else:
+            # For other cases, just check that we got a response
+            self.assertIsNotNone(response)
 
 
 if __name__ == '__main__':

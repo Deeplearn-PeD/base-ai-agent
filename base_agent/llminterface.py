@@ -67,7 +67,7 @@ class LangModel:
     Base class for language model interfaces
     """
 
-    def __init__(self, model: str = 'qwen3', provider=None):
+    def __init__(self, model: str = 'qwen3'):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if 'DEEPSEEK_API_KEY' in os.environ:
             self.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
@@ -83,9 +83,9 @@ class LangModel:
             self.gemini_api_key = None
         self.llm = None
         self.model = model
-        self.provider = provider
+        self.provider = None
         self.chat_history = ChatHistory()
-        self._set_active_model(model, provider)
+        self._set_active_model(model)
 
     def reset_chat_history(self):
         """Reset the chat history"""
@@ -128,12 +128,47 @@ class LangModel:
     @property
     def available_models(self):
         """
-         Get available models from the language model provider
+        Get available models from all configured providers
         """
-        if not self.llm:
-            self._setup_llm_client(provider=self.provider)
         models = []
-        models.extend(self._fetch_provider_models(self.provider))
+        # Always include ollama models
+        try:
+            ollama_models = self._fetch_provider_models('ollama')
+            models.extend(ollama_models)
+        except Exception:
+            pass
+        
+        # Add models from other providers if their API keys are available
+        if self.openai_api_key:
+            try:
+                openai_models = self._fetch_provider_models('openai')
+                models.extend(openai_models)
+            except Exception:
+                pass
+        
+        if self.deepseek_api_key:
+            try:
+                deepseek_models = self._fetch_provider_models('deepseek')
+                models.extend(deepseek_models)
+            except Exception:
+                pass
+        
+        if self.anthropic_api_key:
+            try:
+                anthropic_models = self._fetch_provider_models('anthropic')
+                models.extend(anthropic_models)
+            except Exception:
+                pass
+        
+        if self.gemini_api_key:
+            try:
+                google_models = self._fetch_provider_models('google')
+                models.extend(google_models)
+            except Exception:
+                pass
+        
+        # Remove duplicates and sort
+        models = list(set(models))
         models.sort()
         return models
 
@@ -154,56 +189,18 @@ class LangModel:
                 continue
         return None
 
-    def _set_active_model(self, model: str, provider=None):
-        # If provider is specified, use it directly
-        if provider:
-            self._setup_llm_client(provider)
-            available_models = self._fetch_provider_models(provider)
-            if model in available_models:
-                self.model = model
-                self.provider = provider
-                return
-            else:
-                raise ValueError(f"Model {model} not found in provider {provider}")
-        
-        # Otherwise, search across all providers
+    def _set_active_model(self, model: str):
+        # Search across all available providers
         found_provider = self._find_model_provider(model)
         if found_provider:
             self.model = model
             self.provider = found_provider
             self._setup_llm_client(found_provider)
         else:
-            # Try some fallbacks
-            if 'gpt' in model.lower():
-                # Try to use OpenAI
-                self._setup_llm_client('openai')
-                available_models = self._fetch_provider_models('openai')
-                if available_models:
-                    self.model = 'gpt-4o' if 'gpt-4o' in available_models else available_models[0]
-                    self.provider = 'openai'
-                else:
-                    raise ValueError("OpenAI provider not available")
-            elif 'gemini' in model.lower():
-                # Try to use Google
-                self._setup_llm_client('google')
-                available_models = self._fetch_provider_models('google')
-                if available_models:
-                    self.model = 'gemini-2.5-flash' if 'gemini-2.5-flash' in available_models else available_models[0]
-                    self.provider = 'google'
-                else:
-                    raise ValueError("Google provider not available")
-            else:
-                # Try ollama as last resort
-                self._setup_llm_client('ollama')
-                available_models = self._fetch_provider_models('ollama')
-                if available_models:
-                    self.model = available_models[0]
-                    self.provider = 'ollama'
-                else:
-                    raise ValueError(
-                        f"Model {model} not found in any provider.\n"
-                        f"Please check if the model name is correct and the provider is properly configured."
-                    )
+            raise ValueError(
+                f"Model {model} not found in any available provider.\n"
+                f"Available models: {self.available_models}"
+            )
 
     def get_response(self, question: str, context: str = None) -> str:
         """
@@ -215,7 +212,7 @@ class LangModel:
         Returns: str: model's response
         """
         if not self.llm:
-            self._setup_llm_client(provider=self.provider)
+            self._setup_llm_client(self.provider)
         # Determine which method to use based on provider
         if self.provider in ['openai', 'deepseek', 'google']:
             return self.get_gpt_response(question, context)
@@ -290,19 +287,30 @@ class StructuredLangModel(LangModel):
     Interface to interact with language models using structured query models
     """
 
-    def __init__(self, model: str = 'gpt-4o', provider: str = 'openai', retries=3):
+    def __init__(self, model: str = 'gpt-4o', retries=3):
         """
         Initialize the StructuredLangModel class with a language model.
         :param model:  Large Language Model to use.
-        :param provider: Provider of the language model, e.g., 'openai', 'ollama', etc.
         :param retries: Number of retries to attempt.
         """
-        super().__init__(model, provider=provider)
+        super().__init__(model)
         self.retries = retries
-        if 'gpt' in model:
-            api_key = os.getenv('OPENAI_API_KEY')
-            self.llm = instructor.from_openai(OpenAI(api_key=api_key))
-        else:
+        # Setup instructor based on the found provider
+        if self.provider in ['openai', 'deepseek', 'google']:
+            if self.provider == 'openai':
+                api_key = self.openai_api_key
+                base_url = None
+            elif self.provider == 'deepseek':
+                api_key = self.deepseek_api_key
+                base_url = 'https://api.deepseek.com/v1'
+            elif self.provider == 'google':
+                api_key = self.gemini_api_key
+                base_url = 'https://generativelanguage.googleapis.com/v1beta/openai/'
+            
+            self.llm = instructor.from_openai(
+                OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+            )
+        else:  # ollama
             self.llm = instructor.from_openai(
                 OpenAI(
                     base_url=os.getenv('OLLAMA_API_BASE', 'http://127.0.0.1:11434/v1'),
