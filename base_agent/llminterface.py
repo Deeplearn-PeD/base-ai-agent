@@ -212,7 +212,7 @@ class StructuredLangModel(LangModel):
         else:
             self.llm = instructor.from_openai(
                 OpenAI(
-                    base_url=os.getenv('OLLAMA_API_BASE', 'http://127.0.0.1:11434/v1'),
+                    base_url=os.getenv('OLLAMA_HOST', 'http://127.0.0.1:11434/v1'),
                     api_key=os.getenv('OLLAMA_API_KEY', 'ollama')
                 ),
                 mode=instructor.Mode.JSON,
