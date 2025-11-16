@@ -114,6 +114,7 @@ class LangModel:
         if not self.llm:
             self._setup_llm_client(provider=self.provider)
         models = []
+        #refactor the multiple ifs below to a function that fetches the models from the specified provider catching any connection errors, AI!
         if self.openai_api_key and self.provider == 'openai':
             models.extend([m.id for m in self.llm.models.list().data])
         if self.deepseek_api_key and self.provider == 'deepseek':
