@@ -67,7 +67,7 @@ class LangModel:
     Base class for language model interfaces
     """
 
-    def __init__(self, model: str = 'gpt-4o', provider='google'):
+    def __init__(self, model: str = 'qwen3', provider='ollama'):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if 'DEEPSEEK_API_KEY' in os.environ:
             self.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
@@ -91,7 +91,7 @@ class LangModel:
         """Reset the chat history"""
         self.chat_history = ChatHistory()
 
-    def _setup_llm_client(self, provider='openai'):
+    def _setup_llm_client(self, provider='ollama'):
         """Setup the LLM client for the specified provider"""
         self.provider =  provider
         if provider == 'openai':
