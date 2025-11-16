@@ -67,7 +67,7 @@ class LangModel:
     Base class for language model interfaces
     """
 
-    def __init__(self, model: str = 'qwen3', provider='ollama'):
+    def __init__(self, model: str = 'qwen3', provider=None):
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if 'DEEPSEEK_API_KEY' in os.environ:
             self.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
@@ -137,18 +137,73 @@ class LangModel:
         models.sort()
         return models
 
-    def _set_active_model(self, model: str, provider='openai'):
-        available_model_names = self.available_models  # [m['name'].split(':')[0] for m in self.available_models]
-        if 'gpt' in model:
-            self.model = 'gpt-4o'
-        if 'gemini' in model:
-            self.model = 'gemini-2.5-flash'
-        elif model in available_model_names:
+    def _find_model_provider(self, model: str):
+        """Find which provider supports the requested model"""
+        providers = ['openai', 'deepseek', 'anthropic', 'google', 'ollama']
+        for provider in providers:
+            try:
+                # Setup client for this provider
+                self._setup_llm_client(provider)
+                # Get available models for this provider
+                available_models = self._fetch_provider_models(provider)
+                # Check if model is available
+                if model in available_models:
+                    return provider
+            except Exception as e:
+                print(f"Error checking provider {provider}: {e}")
+                continue
+        return None
+
+    def _set_active_model(self, model: str, provider=None):
+        # If provider is specified, use it directly
+        if provider:
+            self._setup_llm_client(provider)
+            available_models = self._fetch_provider_models(provider)
+            if model in available_models:
+                self.model = model
+                self.provider = provider
+                return
+            else:
+                raise ValueError(f"Model {model} not found in provider {provider}")
+        
+        # Otherwise, search across all providers
+        found_provider = self._find_model_provider(model)
+        if found_provider:
             self.model = model
+            self.provider = found_provider
+            self._setup_llm_client(found_provider)
         else:
-            raise ValueError(
-                f"Model {model} not supported.\nAvailable models: {[m for m in self.available_models]}")
-            self.model = "llama3.2"
+            # Try some fallbacks
+            if 'gpt' in model.lower():
+                # Try to use OpenAI
+                self._setup_llm_client('openai')
+                available_models = self._fetch_provider_models('openai')
+                if available_models:
+                    self.model = 'gpt-4o' if 'gpt-4o' in available_models else available_models[0]
+                    self.provider = 'openai'
+                else:
+                    raise ValueError("OpenAI provider not available")
+            elif 'gemini' in model.lower():
+                # Try to use Google
+                self._setup_llm_client('google')
+                available_models = self._fetch_provider_models('google')
+                if available_models:
+                    self.model = 'gemini-2.5-flash' if 'gemini-2.5-flash' in available_models else available_models[0]
+                    self.provider = 'google'
+                else:
+                    raise ValueError("Google provider not available")
+            else:
+                # Try ollama as last resort
+                self._setup_llm_client('ollama')
+                available_models = self._fetch_provider_models('ollama')
+                if available_models:
+                    self.model = available_models[0]
+                    self.provider = 'ollama'
+                else:
+                    raise ValueError(
+                        f"Model {model} not found in any provider.\n"
+                        f"Please check if the model name is correct and the provider is properly configured."
+                    )
 
     def get_response(self, question: str, context: str = None) -> str:
         """
@@ -161,9 +216,12 @@ class LangModel:
         """
         if not self.llm:
             self._setup_llm_client(provider=self.provider)
-        if 'gpt' in self.model or 'gemini' in self.model:
+        # Determine which method to use based on provider
+        if self.provider in ['openai', 'deepseek', 'google']:
             return self.get_gpt_response(question, context)
-        else:
+        elif self.provider == 'anthropic':
+            return self.get_anthropic_response(question, context)
+        else:  # ollama
             return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str) -> str:
@@ -179,6 +237,37 @@ class LangModel:
         resp_msg = {'role': 'assistant', 'content': response.choices[0].message.content}
         self.chat_history.enqueue(resp_msg)
         return response.choices[0].message.content
+
+    def get_anthropic_response(self, question: str, context: str) -> str:
+        """
+        Get response from Anthropic models
+        :param question: question to ask
+        :param context: context to provide
+        :return: model's response
+        """
+        msg = {'role': 'user', 'content': context + '\n\n' + question}
+        self.chat_history.enqueue(msg)
+        messages = self.chat_history.get_all()
+        
+        # Convert messages to Anthropic format
+        system_prompt = None
+        anthropic_messages = []
+        for msg in messages:
+            if msg['role'] == 'system':
+                system_prompt = msg['content']
+            else:
+                anthropic_messages.append({"role": msg['role'], "content": msg['content']})
+        
+        response = self.llm.messages.create(
+            model=self.model,
+            messages=anthropic_messages,
+            system=system_prompt,
+            max_tokens=1000
+        )
+        resp_msg = {'role': 'assistant', 'content': response.content[0].text}
+        self.chat_history.enqueue(resp_msg)
+        
+        return response.content[0].text
 
     def get_ollama_response(self, question: str, context: str) -> str:
         """
@@ -229,25 +318,29 @@ class StructuredLangModel(LangModel):
         """
         self.chat_history = ChatHistory()
 
-    def get_response(self, question: str, context: str = "", response_model: BaseModel = None) -> str:
+    def get_response(self, question: str, context: str = "", response_model: BaseModel = None):
         """
         Get response from any supported model
 
         :param question: question to ask
         :param context: question context to provide
         :param response_model: response model to use
-        :return: model's response in JSON format
+        :return: model's response in the specified format
         """
         msg = {'role': 'user', 'content': context + '\n\n' + question}
         self.chat_history.enqueue(msg)
         messages = self.chat_history.get_all()
+        
+        # Use instructor to get structured response
         response = self.llm.chat.completions.create(
             model=self.model,
             messages=messages,
             response_model=response_model,
             max_retries=self.retries
         )
-        resp_msg = {'role': 'assistant', 'content': response.choices[0].message.content}
+        
+        # The response is already the structured model instance
+        resp_msg = {'role': 'assistant', 'content': str(response)}
         self.chat_history.enqueue(resp_msg)
 
-        return resp_msg['content']
+        return response
