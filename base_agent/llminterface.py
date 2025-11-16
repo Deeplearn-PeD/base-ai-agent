@@ -106,6 +106,25 @@ class LangModel:
             host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
             self.llm = Client(host=host)
 
+    def _fetch_provider_models(self, provider):
+        """Fetch models from the specified provider, handling connection errors"""
+        try:
+            if provider == 'openai' and self.openai_api_key:
+                return [m.id for m in self.llm.models.list().data]
+            elif provider == 'deepseek' and self.deepseek_api_key:
+                return [m.id for m in self.llm.models.list().data]
+            elif provider == 'anthropic' and self.anthropic_api_key:
+                return [m.id for m in self.llm.models.list().data]
+            elif provider == 'google' and self.gemini_api_key:
+                return [m.id for m in self.llm.models.list().data]
+            elif provider == 'ollama':
+                host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
+                llm = Client(host=host)
+                return [m['name'].split(':')[0] for m in llm.list()['models']]
+        except Exception as e:
+            print(f"Error fetching models from {provider}: {e}")
+        return []
+
     @property
     def available_models(self):
         """
@@ -114,24 +133,8 @@ class LangModel:
         if not self.llm:
             self._setup_llm_client(provider=self.provider)
         models = []
-        #refactor the multiple ifs below to a function that fetches the models from the specified provider catching any connection errors, AI!
-        if self.openai_api_key and self.provider == 'openai':
-            models.extend([m.id for m in self.llm.models.list().data])
-        if self.deepseek_api_key and self.provider == 'deepseek':
-            models.extend([m.id for m in self.llm.models.list().data])
-        if self.anthropic_api_key and self.provider == 'anthropic':
-            models.extend([m.id for m in self.llm.models.list().data])
-        if self.gemini_api_key and self.provider == 'google':
-            models.extend([m.id for m in self.llm.models.list().data])
-
-        try:
-            host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
-            llm = Client(host=host)
-            models.extend([m['name'].split(':')[0] for m in llm.list()['models']])
-        except Exception as e:
-            print(f"Error: {e}, unable to fetch Ollama models. ")
+        models.extend(self._fetch_provider_models(self.provider))
         models.sort()
-
         return models
 
     def _set_active_model(self, model: str, provider='openai'):
