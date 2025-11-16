@@ -8,19 +8,19 @@ import json
 class TestLangModel(unittest.TestCase):
     def test_init_with_gpt_model(self):
         """Testa inicialização com modelo GPT"""
-        lm = LangModel('gpt-4o', provider='openai')
+        lm = LangModel('gpt-4o')
         self.assertEqual(lm.model, 'gpt-4o')
         self.assertIsNotNone(lm.chat_history)
 
     def test_init_with_ollama_model(self):
         """Testa inicialização com modelo Ollama"""
-        lm = LangModel('qwen3', provider='ollama')
+        lm = LangModel('qwen3')
         self.assertEqual(lm.model, 'qwen3')
         self.assertIsNotNone(lm.chat_history)
 
     def test_init_with_deepseek_model(self):
         """Testa inicialização com modelo DeepSeek"""
-        lm = LangModel(model='deepseek-chat', provider='deepseek')
+        lm = LangModel(model='deepseek-chat')
         self.assertEqual(lm.model, 'deepseek-chat')
         self.assertIsNotNone(lm.chat_history)
 
@@ -39,7 +39,7 @@ class TestLangModel(unittest.TestCase):
 
     def test_get_response_basic_functionality(self):
         """Testa funcionalidade básica de get_response"""
-        lm = LangModel('gpt-4o', provider='openai')
+        lm = LangModel('gpt-4o')
         response = lm.get_response('What is 2+2?', 'Simple math question')
         self.assertIsInstance(response, str)
         self.assertGreater(len(response), 0)
@@ -64,7 +64,7 @@ class TestStructuredLangModel(unittest.TestCase):
 
     def test_init_with_custom_params(self):
         """Testa inicialização com parâmetros customizados"""
-        slm = StructuredLangModel(model='gpt-4o', provider='openai', retries=5)
+        slm = StructuredLangModel(model='gpt-4o', retries=5)
         self.assertEqual(slm.model, 'gpt-4o')
         self.assertEqual(slm.retries, 5)
 
@@ -116,7 +116,7 @@ class TestStructuredLangModel(unittest.TestCase):
     def test_get_structured_output_ollama(self):
         """Testa saída estruturada com modelo Ollama"""
         try:
-            slm = StructuredLangModel('llama3.2', provider='ollama')
+            slm = StructuredLangModel('llama3.2')
             response = slm.get_response(
                 'What is 2+2? Be confident.',
                 '',
