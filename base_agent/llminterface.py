@@ -167,6 +167,8 @@ class LangModel:
 
     def _fetch_provider_models(self, provider):
         """Fetch models from the specified provider, handling connection errors"""
+        # please make sure self.llm is not None, i.e. that is has been initialized, according to the provider, AI!
+
         try:
             if provider == 'openai' and self.keys[provider]:
                 return [m.id for m in self.llm.models.list().data]
@@ -236,9 +238,9 @@ class LangModel:
         else:
             print(f"Model {model} not found in any available provider.\n"
                 f"Available models: {self.available_models}\n"
-                  f"Setting up {self.available_models[0]} model."
+                  f"Setting up {'qwen3' if 'qwen3' in self.available_models else self.available_models[-1]} model."
             )
-            self.model = self.available_models[0]
+            self.model = 'qwen3' if 'qwen3' in self.available_models else self.available_models[-1]
             self._setup_llm_client(found_provider)
 
     def get_response(self, question: str, context: str = None) -> str:
