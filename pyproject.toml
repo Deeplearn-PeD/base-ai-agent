@@ -1,6 +1,6 @@
 [project]
 name = "base-ai-agent"
-version = "0.3.2"
+version = "0.4.0"
 description = "Base class for all of Deeplearn's  AI agents."
 authors = [{ name = "Flávio Codeço Coelho", email = "fccoelho@gmail.com" }]
 requires-python = ">=3.12,<3.14"
