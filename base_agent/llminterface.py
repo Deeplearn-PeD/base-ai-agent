@@ -87,6 +87,7 @@ class LangModel:
             for provider, config in provider_configs.items()
         }
         # Default fallback if config.yml is missing some providers
+        # Remove this fallback, AI!
         default_keys = {
             'openai': 'OPENAI_API_KEY',
             'deepseek': 'DEEPSEEK_API_KEY',
