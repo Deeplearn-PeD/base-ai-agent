@@ -167,17 +167,60 @@ class LangModel:
 
     def _fetch_provider_models(self, provider):
         """Fetch models from the specified provider, handling connection errors"""
-        # please make sure self.llm is not None, i.e. that is has been initialized, according to the provider, AI!
-
         try:
             if provider == 'openai' and self.keys[provider]:
-                return [m.id for m in self.llm.models.list().data]
+                # Create a temporary OpenAI client if self.llm is not initialized
+                if self.llm is None or self.provider != provider:
+                    # Get provider configuration from config.yml
+                    provider_config = {}
+                    if CONFIG and 'providers' in CONFIG:
+                        provider_config = CONFIG['providers'].get(provider, {})
+                    base_url = provider_config.get('base_url')
+                    api_key = self.keys[provider]
+                    temp_client = OpenAI(api_key=api_key, base_url=base_url)
+                else:
+                    temp_client = self.llm
+                return [m.id for m in temp_client.models.list().data]
             elif provider == 'deepseek' and self.keys[provider]:
-                return [m.id for m in self.llm.models.list().data]
+                if self.llm is None or self.provider != provider:
+                    provider_config = {}
+                    if CONFIG and 'providers' in CONFIG:
+                        provider_config = CONFIG['providers'].get(provider, {})
+                    base_url = provider_config.get('base_url', 'https://api.deepseek.com/v1')
+                    api_key = self.keys[provider]
+                    temp_client = OpenAI(api_key=api_key, base_url=base_url)
+                else:
+                    temp_client = self.llm
+                return [m.id for m in temp_client.models.list().data]
             elif provider == 'anthropic' and self.keys[provider]:
-                return [m.id for m in self.llm.models.list().data]
+                if self.llm is None or self.provider != provider:
+                    api_key = self.keys[provider]
+                    temp_client = anthropic.Anthropic(api_key=api_key)
+                else:
+                    temp_client = self.llm
+                return [m.id for m in temp_client.models.list().data]
             elif provider == 'google' and self.keys[provider]:
-                return [m.id for m in self.llm.models.list().data]
+                if self.llm is None or self.provider != provider:
+                    provider_config = {}
+                    if CONFIG and 'providers' in CONFIG:
+                        provider_config = CONFIG['providers'].get(provider, {})
+                    base_url = provider_config.get('base_url', 'https://generativelanguage.googleapis.com/v1beta/openai/')
+                    api_key = self.keys[provider]
+                    temp_client = OpenAI(api_key=api_key, base_url=base_url)
+                else:
+                    temp_client = self.llm
+                return [m.id for m in temp_client.models.list().data]
+            elif provider == 'qwen' and self.keys[provider]:
+                if self.llm is None or self.provider != provider:
+                    provider_config = {}
+                    if CONFIG and 'providers' in CONFIG:
+                        provider_config = CONFIG['providers'].get(provider, {})
+                    base_url = provider_config.get('base_url', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1')
+                    api_key = self.keys[provider]
+                    temp_client = OpenAI(api_key=api_key, base_url=base_url)
+                else:
+                    temp_client = self.llm
+                return [m.id for m in temp_client.models.list().data]
             elif provider == 'ollama':
                 host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
                 llm = Client(host=host)
