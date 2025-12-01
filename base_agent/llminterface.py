@@ -86,29 +86,8 @@ class LangModel:
             provider: config.get('api_key_env_var', '')
             for provider, config in provider_configs.items()
         }
-        # Default fallback if config.yml is missing some providers
-        # Remove this fallback, AI!
-        default_keys = {
-            'openai': 'OPENAI_API_KEY',
-            'deepseek': 'DEEPSEEK_API_KEY',
-            'anthropic': 'ANTHROPIC_API_KEY',
-            'google': 'GOOGLE_API_KEY',
-            'ollama': 'OLLAMA_API_BASE',
-            'qwen': 'DASHSCOPE_API_KEY'
-        }
-        # Merge, preferring config.yml values
-        for provider, key in default_keys.items():
-            if provider not in supported_API_KEYS:
-                supported_API_KEYS[provider] = key
     else:
-        supported_API_KEYS = {
-            'openai': 'OPENAI_API_KEY',
-            'deepseek': 'DEEPSEEK_API_KEY',
-            'anthropic': 'ANTHROPIC_API_KEY',
-            'google': 'GOOGLE_API_KEY',
-            'ollama': 'OLLAMA_API_BASE',
-            'qwen': 'DASHSCOPE_API_KEY'
-        }
+        supported_API_KEYS = {}
 
     def __init__(self, model: str = None, provider=None):
         # Initialize keys from environment variables using supported_API_KEYS
