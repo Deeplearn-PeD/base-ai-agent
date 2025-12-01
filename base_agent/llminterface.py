@@ -168,6 +168,7 @@ class LangModel:
     def _fetch_provider_models(self, provider):
         """Fetch models from the specified provider, handling connection errors"""
         try:
+            # try to simplify the code below by moving the initialization of self.llm outside of the if/elif blocks to reduce code duplication. AI!
             if provider == 'openai' and self.keys[provider]:
                 # Create a temporary OpenAI client if self.llm is not initialized
                 if self.llm is None or self.provider != provider:
