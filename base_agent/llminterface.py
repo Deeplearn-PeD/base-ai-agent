@@ -255,10 +255,12 @@ class LangModel:
         """Find which provider supports the requested model"""
 
         for provider in self.keys.keys():
-
             x = self.available_models
-            if model in self.provider_models[provider]:
-                return provider
+            try:
+                if model in self.provider_models[provider]:
+                    return provider
+            except KeyError:
+                print(f"Provider {provider} not found. Skipping")
         else:
             print(f"Model {model} not found in any provider")
 
