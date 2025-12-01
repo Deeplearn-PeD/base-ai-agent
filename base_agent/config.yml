@@ -2,16 +2,16 @@ languages:
   - en_US
   - pt_BR
 
- # Language models supported
+ # Model providers and Language models supported
 ---
 openai:
   gpt-4:
     interface="API"
-Google:
+ollama:
   gemma2:
     interface="ollama"
   qwen3:
       interface="ollama"
 
 
- # Language models supported
+

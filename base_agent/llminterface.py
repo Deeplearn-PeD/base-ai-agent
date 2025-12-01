@@ -7,6 +7,7 @@ import instructor
 from ollama import Client
 from openai import OpenAI
 from pydantic import BaseModel
+from collections import defaultdict
 
 dotenv.load_dotenv()
 
@@ -66,23 +67,28 @@ class LangModel:
     """
     Base class for language model interfaces
     """
+    supported_API_KEYS = {
+        'openai': 'OPENAI_API_KEY',
+        'deepseek': 'DEEPSEEK_API_KEY',
+        'anthropic': 'ANTHROPIC_API_KEY',
+        'google': 'GOOGLE_API_KEY',
+        'ollama': 'OLLAMA_API_BASE',
+        'qwen': 'DASHSCOPE_API_KEY'
+    }
 
-    def __init__(self, model: str = 'qwen3'):
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        if 'DEEPSEEK_API_KEY' in os.environ:
-            self.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY')
-        else:
-            self.deepseek_api_key = None
-        if 'ANTHROPIC_API_KEY' in os.environ:
-            self.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
-        else:
-            self.anthropic_api_key = None
-        if 'GOOGLE_API_KEY' in os.environ:
-            self.gemini_api_key = os.getenv('GOOGLE_API_KEY')
-        else:
-            self.gemini_api_key = None
+    def __init__(self, model: str = 'qwen3', provider=None):
+        for provider, env_var in self.supported_API_KEYS.items():
+            self.keys = {}
+            if env_var in os.environ:
+                self.keys[provider] = os.getenv(env_var)
+            else:
+                self.keys[provider] = None
+
         self.llm = None
         self.model = model
+        self._available_models = []
+        self.available_models
+        self.provider_models = defaultdict(lambda:[])
         self.provider = None
         self.chat_history = ChatHistory()
         self._set_active_model(model)
@@ -91,17 +97,19 @@ class LangModel:
         """Reset the chat history"""
         self.chat_history = ChatHistory()
 
-    def _setup_llm_client(self, provider='ollama'):
+    def _setup_llm_client(self, provider: str='ollama', key: str=''):
         """Setup the LLM client for the specified provider"""
         self.provider =  provider
         if provider == 'openai':
-            self.llm = OpenAI(api_key=self.openai_api_key)
+            self.llm = OpenAI(api_key=self.keys[provider])
         elif provider == 'deepseek':
-            self.llm = OpenAI(api_key=self.deepseek_api_key, base_url='https://api.deepseek.com/v1')
+            self.llm = OpenAI(api_key=self.keys[provider], base_url='https://api.deepseek.com/v1')
         elif provider == 'anthropic':
-            self.llm = anthropic.Anthropic(api_key=self.anthropic_api_key)
+            self.llm = anthropic.Anthropic(api_key=self.keys[provider])
         elif provider == 'google':
-            self.llm = OpenAI(api_key=self.gemini_api_key, base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
+            self.llm = OpenAI(api_key=self.keys[provider], base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
+        elif provider == 'qwen':
+            self.llm = OpenAI(api_key=self.keys[provider],base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
         elif provider == 'ollama' and ("OLLAMA_API_BASE" in os.environ):
             host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
             self.llm = Client(host=host)
@@ -109,13 +117,13 @@ class LangModel:
     def _fetch_provider_models(self, provider):
         """Fetch models from the specified provider, handling connection errors"""
         try:
-            if provider == 'openai' and self.openai_api_key:
+            if provider == 'openai' and self.keys[provider]:
                 return [m.id for m in self.llm.models.list().data]
-            elif provider == 'deepseek' and self.deepseek_api_key:
+            elif provider == 'deepseek' and self.keys[provider]:
                 return [m.id for m in self.llm.models.list().data]
-            elif provider == 'anthropic' and self.anthropic_api_key:
+            elif provider == 'anthropic' and self.keys[provider]:
                 return [m.id for m in self.llm.models.list().data]
-            elif provider == 'google' and self.gemini_api_key:
+            elif provider == 'google' and self.keys[provider]:
                 return [m.id for m in self.llm.models.list().data]
             elif provider == 'ollama':
                 host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
@@ -130,77 +138,57 @@ class LangModel:
         """
         Get available models from all configured providers
         """
+        if self._available_models:
+            return self._available_models
         models = []
+        self.provider_models = {}
         # Always include ollama models
         try:
             ollama_models = self._fetch_provider_models('ollama')
+            self.provider_models['ollama'] = ollama_models
             models.extend(ollama_models)
         except Exception:
             pass
         
         # Add models from other providers if their API keys are available
-        if self.openai_api_key:
-            try:
-                openai_models = self._fetch_provider_models('openai')
-                models.extend(openai_models)
-            except Exception:
-                pass
-        
-        if self.deepseek_api_key:
-            try:
-                deepseek_models = self._fetch_provider_models('deepseek')
-                models.extend(deepseek_models)
-            except Exception:
-                pass
-        
-        if self.anthropic_api_key:
-            try:
-                anthropic_models = self._fetch_provider_models('anthropic')
-                models.extend(anthropic_models)
-            except Exception:
-                pass
-        
-        if self.gemini_api_key:
-            try:
-                google_models = self._fetch_provider_models('google')
-                models.extend(google_models)
-            except Exception:
-                pass
-        
+        for provider, key in self.keys.items():
+            if key:
+                mods = self._fetch_provider_models(provider)
+                self.provider_models[provider] = mods
+                models.extend(mods)
+
         # Remove duplicates and sort
         models = list(set(models))
         models.sort()
+        self._available_models = models
         return models
 
     def _find_model_provider(self, model: str):
         """Find which provider supports the requested model"""
-        providers = ['openai', 'deepseek', 'anthropic', 'google', 'ollama']
-        for provider in providers:
-            try:
-                # Setup client for this provider
-                self._setup_llm_client(provider)
-                # Get available models for this provider
-                available_models = self._fetch_provider_models(provider)
-                # Check if model is available
-                if model in available_models:
-                    return provider
-            except Exception as e:
-                print(f"Error checking provider {provider}: {e}")
-                continue
-        return None
+
+        for provider in self.keys.keys():
+
+            x = self.available_models
+            if model in self.provider_models[provider]:
+                return provider
+        else:
+            print(f"Model {model} not found in any provider")
+
+
 
     def _set_active_model(self, model: str):
         # Search across all available providers
         found_provider = self._find_model_provider(model)
-        if found_provider:
+        if model in self.available_models:
             self.model = model
-            self.provider = found_provider
             self._setup_llm_client(found_provider)
         else:
-            raise ValueError(
-                f"Model {model} not found in any available provider.\n"
-                f"Available models: {self.available_models}"
+            print(f"Model {model} not found in any available provider.\n"
+                f"Available models: {self.available_models}\n"
+                  f"Setting up {self.available_models[0]} model."
             )
+            self.model = self.available_models[0]
+            self._setup_llm_client(found_provider)
 
     def get_response(self, question: str, context: str = None) -> str:
         """

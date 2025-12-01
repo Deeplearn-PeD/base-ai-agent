@@ -39,7 +39,7 @@ class TestLangModel(unittest.TestCase):
 
     def test_get_response_basic_functionality(self):
         """Testa funcionalidade básica de get_response"""
-        lm = LangModel('gpt-4o')
+        lm = LangModel('llama3.2')
         response = lm.get_response('What is 2+2?', 'Simple math question')
         self.assertIsInstance(response, str)
         self.assertGreater(len(response), 0)
