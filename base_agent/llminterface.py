@@ -1,5 +1,7 @@
 import os
-from collections import deque
+import yaml
+from collections import deque, defaultdict
+from pathlib import Path
 
 import anthropic
 import dotenv
@@ -7,9 +9,19 @@ import instructor
 from ollama import Client
 from openai import OpenAI
 from pydantic import BaseModel
-from collections import defaultdict
 
 dotenv.load_dotenv()
+
+# Load configuration from config.yml
+CONFIG_PATH = Path(__file__).parent / "config.yml"
+try:
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+        CONFIG = yaml.safe_load(f)
+except FileNotFoundError:
+    CONFIG = {}
+except Exception as e:
+    print(f"Warning: Could not load config.yml: {e}")
+    CONFIG = {}
 
 
 class ChatHistory:
@@ -67,30 +79,65 @@ class LangModel:
     """
     Base class for language model interfaces
     """
-    supported_API_KEYS = {
-        'openai': 'OPENAI_API_KEY',
-        'deepseek': 'DEEPSEEK_API_KEY',
-        'anthropic': 'ANTHROPIC_API_KEY',
-        'google': 'GOOGLE_API_KEY',
-        'ollama': 'OLLAMA_API_BASE',
-        'qwen': 'DASHSCOPE_API_KEY'
-    }
+    # Load provider configuration from config.yml
+    if CONFIG and 'providers' in CONFIG:
+        provider_configs = CONFIG['providers']
+        supported_API_KEYS = {
+            provider: config.get('api_key_env_var', '')
+            for provider, config in provider_configs.items()
+        }
+        # Default fallback if config.yml is missing some providers
+        default_keys = {
+            'openai': 'OPENAI_API_KEY',
+            'deepseek': 'DEEPSEEK_API_KEY',
+            'anthropic': 'ANTHROPIC_API_KEY',
+            'google': 'GOOGLE_API_KEY',
+            'ollama': 'OLLAMA_API_BASE',
+            'qwen': 'DASHSCOPE_API_KEY'
+        }
+        # Merge, preferring config.yml values
+        for provider, key in default_keys.items():
+            if provider not in supported_API_KEYS:
+                supported_API_KEYS[provider] = key
+    else:
+        supported_API_KEYS = {
+            'openai': 'OPENAI_API_KEY',
+            'deepseek': 'DEEPSEEK_API_KEY',
+            'anthropic': 'ANTHROPIC_API_KEY',
+            'google': 'GOOGLE_API_KEY',
+            'ollama': 'OLLAMA_API_BASE',
+            'qwen': 'DASHSCOPE_API_KEY'
+        }
 
-    def __init__(self, model: str = 'qwen3', provider=None):
-        for provider, env_var in self.supported_API_KEYS.items():
-            self.keys = {}
+    def __init__(self, model: str = None, provider=None):
+        # Initialize keys from environment variables using supported_API_KEYS
+        self.keys = {}
+        for provider_name, env_var in self.supported_API_KEYS.items():
             if env_var in os.environ:
-                self.keys[provider] = os.getenv(env_var)
+                self.keys[provider_name] = os.getenv(env_var)
             else:
-                self.keys[provider] = None
-
+                self.keys[provider_name] = None
+        
         self.llm = None
-        self.model = model
         self._available_models = []
-        self.available_models
-        self.provider_models = defaultdict(lambda:[])
+        self.provider_models = defaultdict(lambda: [])
         self.provider = None
         self.chat_history = ChatHistory()
+        
+        # If no model is specified, try to get default model from config.yml
+        if model is None:
+            # Try to get default model from the first provider that has a key
+            for provider_name, config in CONFIG.get('providers', {}).items():
+                if provider_name in self.keys and self.keys[provider_name]:
+                    model = config.get('default_model')
+                    if model:
+                        break
+            # If still None, use a fallback
+            if model is None:
+                model = 'qwen3'
+        
+        self.model = model
+        self.available_models  # This triggers fetching models
         self._set_active_model(model)
 
     def reset_chat_history(self):
@@ -98,21 +145,45 @@ class LangModel:
         self.chat_history = ChatHistory()
 
     def _setup_llm_client(self, provider: str='ollama', key: str=''):
-        """Setup the LLM client for the specified provider"""
-        self.provider =  provider
+        """Setup the LLM client for the specified provider using config.yml"""
+        self.provider = provider
+        
+        # Get provider configuration from config.yml
+        provider_config = {}
+        if CONFIG and 'providers' in CONFIG:
+            provider_config = CONFIG['providers'].get(provider, {})
+        
+        # Determine base_url and default_model from config, with fallbacks
+        base_url = provider_config.get('base_url')
+        default_model = provider_config.get('default_model')
+        
         if provider == 'openai':
-            self.llm = OpenAI(api_key=self.keys[provider])
+            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
         elif provider == 'deepseek':
-            self.llm = OpenAI(api_key=self.keys[provider], base_url='https://api.deepseek.com/v1')
+            if not base_url:
+                base_url = 'https://api.deepseek.com/v1'
+            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
         elif provider == 'anthropic':
             self.llm = anthropic.Anthropic(api_key=self.keys[provider])
         elif provider == 'google':
-            self.llm = OpenAI(api_key=self.keys[provider], base_url='https://generativelanguage.googleapis.com/v1beta/openai/')
+            if not base_url:
+                base_url = 'https://generativelanguage.googleapis.com/v1beta/openai/'
+            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
         elif provider == 'qwen':
-            self.llm = OpenAI(api_key=self.keys[provider],base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
-        elif provider == 'ollama' and ("OLLAMA_API_BASE" in os.environ):
-            host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
-            self.llm = Client(host=host)
+            if not base_url:
+                base_url = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
+            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
+        elif provider == 'ollama':
+            # For ollama, base_url is used as host
+            if not base_url:
+                base_url = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
+            else:
+                # If base_url is set in config, it should be used
+                # But environment variable may override
+                env_host = os.getenv('OLLAMA_API_BASE')
+                if env_host:
+                    base_url = env_host
+            self.llm = Client(host=base_url)
 
     def _fetch_provider_models(self, provider):
         """Fetch models from the specified provider, handling connection errors"""
@@ -275,34 +346,56 @@ class StructuredLangModel(LangModel):
     Interface to interact with language models using structured query models
     """
 
-    def __init__(self, model: str = 'gpt-4o', retries=3):
+    def __init__(self, model: str = None, retries=3):
         """
         Initialize the StructuredLangModel class with a language model.
         :param model:  Large Language Model to use.
         :param retries: Number of retries to attempt.
         """
+        # If no model is specified, try to get default from config for structured use
+        if model is None:
+            # Look for a suitable default model for structured output
+            if CONFIG and 'providers' in CONFIG:
+                # Prefer openai's default model
+                openai_config = CONFIG['providers'].get('openai', {})
+                model = openai_config.get('default_model', 'gpt-4o')
+            else:
+                model = 'gpt-4o'
+        
         super().__init__(model)
         self.retries = retries
-        # Setup instructor based on the found provider
-        if self.provider in ['openai', 'deepseek', 'google']:
-            if self.provider == 'openai':
-                api_key = self.openai_api_key
-                base_url = None
-            elif self.provider == 'deepseek':
-                api_key = self.deepseek_api_key
-                base_url = 'https://api.deepseek.com/v1'
-            elif self.provider == 'google':
-                api_key = self.gemini_api_key
-                base_url = 'https://generativelanguage.googleapis.com/v1beta/openai/'
+        
+        # Setup instructor based on the found provider using config
+        if self.provider in ['openai', 'deepseek', 'google', 'qwen']:
+            # Get provider configuration
+            provider_config = {}
+            if CONFIG and 'providers' in CONFIG:
+                provider_config = CONFIG['providers'].get(self.provider, {})
+            
+            base_url = provider_config.get('base_url')
+            api_key = self.keys.get(self.provider)
+            
+            # Create OpenAI client with config
+            client_kwargs = {'api_key': api_key}
+            if base_url:
+                client_kwargs['base_url'] = base_url
             
             self.llm = instructor.from_openai(
-                OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+                OpenAI(**client_kwargs)
             )
-        else:  # ollama
+        else:  # ollama or others
+            # For ollama, use the host from config or environment
+            host = os.getenv('OLLAMA_API_BASE', 'http://127.0.0.1:11434')
+            if CONFIG and 'providers' in CONFIG and 'ollama' in CONFIG['providers']:
+                ollama_config = CONFIG['providers']['ollama']
+                config_host = ollama_config.get('base_url')
+                if config_host:
+                    host = config_host
+            
             self.llm = instructor.from_openai(
                 OpenAI(
-                    base_url=os.getenv('OLLAMA_API_BASE', 'http://127.0.0.1:11434/v1'),
-                    api_key=os.getenv('OLLAMA_API_KEY', 'ollama')
+                    base_url=host + '/v1' if not host.endswith('/v1') else host,
+                    api_key='ollama'  # Dummy key for ollama
                 ),
                 mode=instructor.Mode.JSON,
                 stream=False
