@@ -7,7 +7,7 @@ requires-python = ">=3.12,<3.14"
 readme = "README.md"
 license = {text = "GPLv3" }
 dependencies = [
-    "loguru>=0.7.2",
+    "loguru>=0.6,<0.7",
     "pyyaml>=6.0.1",
     "openai>=1.16.0",
     "ollama>=0.1.8",
