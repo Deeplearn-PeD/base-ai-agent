@@ -8,7 +8,7 @@ import dotenv
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, UserPromptPart, TextPart
 
@@ -107,13 +107,13 @@ class LangModel:
                 self.keys[provider_name] = os.getenv(env_var)
             else:
                 self.keys[provider_name] = None
-        
+
         self.agent: Optional[Agent] = None
         self._available_models = []
         self.provider_models = defaultdict(list)
         self.provider = provider
         self.chat_history = ChatHistory()
-        
+
         # If no model is specified, try to get default model from config.yml
         if model is None:
             # Try to get default model from the first provider that has a key
@@ -126,7 +126,7 @@ class LangModel:
             # If still None, use a fallback
             if model is None:
                 model = 'qwen3'
-        
+
         self.model = model
         # Pre-fetch models to populate provider_models
         _ = self.available_models
@@ -144,16 +144,16 @@ class LangModel:
 
         if provider == 'anthropic':
             return AnthropicModel(model_name, api_key=api_key)
-        
+
         # Default to OpenAIModel for OpenAI-compatible providers
-        # Most providers in config.yml (OpenAI, DeepSeek, Google, Qwen, Ollama) 
+        # Most providers in config.yml (OpenAI, DeepSeek, Google, Qwen, Ollama)
         # are used via their OpenAI-compatible endpoints.
-        
+
         # Special case: Ollama often needs /v1 suffix if not present
         if provider == 'ollama' and base_url and not base_url.endswith('/v1'):
             base_url = f"{base_url.rstrip('/')}/v1"
-            
-        return OpenAIModel(model_name, api_key=api_key or 'dummy', base_url=base_url)
+
+        return OpenAIChatModel(model_name, api_key=api_key or 'dummy', base_url=base_url)
 
     def _setup_llm_client(self, provider: str = 'ollama'):
         """Setup the Pydantic AI Agent for the specified provider"""
@@ -174,15 +174,15 @@ class LangModel:
                 if resp.status_code == 200:
                     return [m['name'].split(':')[0] for m in resp.json().get('models', [])]
                 return []
-            
+
             # For OpenAI-compatible providers, we can use httpx directly to keep it provider-agnostic
             provider_config = CONFIG.get('providers', {}).get(provider, {})
             base_url = provider_config.get('base_url')
             api_key = self.keys.get(provider)
-            
+
             if not api_key:
                 return []
-                
+
             import httpx
             headers = {"Authorization": f"Bearer {api_key}"}
             # Adjust base_url for model listing if it ends with /v1
@@ -190,7 +190,7 @@ class LangModel:
             resp = httpx.get(list_url, headers=headers, timeout=5.0)
             if resp.status_code == 200:
                 return [m['id'] for m in resp.json().get('data', [])]
-                
+
         except Exception as e:
             print(f"Error fetching models from {provider}: {e}")
         return []
@@ -202,10 +202,10 @@ class LangModel:
         """
         if self._available_models:
             return self._available_models
-            
+
         models = []
         self.provider_models = {}
-        
+
         # Always try ollama
         try:
             ollama_models = self._fetch_provider_models('ollama')
@@ -214,7 +214,7 @@ class LangModel:
                 models.extend(ollama_models)
         except Exception:
             pass
-        
+
         # Add models from other providers if their API keys are available
         for provider, key in self.keys.items():
             if key and provider != 'ollama':
@@ -263,23 +263,23 @@ class LangModel:
             self._setup_llm_client(self.provider or 'ollama')
 
         import asyncio
-        
+
         async def _run():
             # Pass history to the run
             history = self.chat_history.get_all()
-            
+
             # pydantic_ai.Agent.run() supports message_history
             result = await self.agent.run(
                 question,
                 system_prompt=context,
                 message_history=history
             )
-            
+
             # Save new messages to history
             # result.new_messages() contains only the new messages from this run
             for msg in result.new_messages():
                 self.chat_history.enqueue(msg)
-                
+
             return result.data
 
         # Use sync wrapper for async call
@@ -307,14 +307,14 @@ class StructuredLangModel(LangModel):
                 model = openai_config.get('default_model', 'gpt-4o')
             else:
                 model = 'gpt-4o'
-        
+
         super().__init__(model)
         self.retries = retries
 
     def get_response(self, question: str, context: str = "", response_model: Optional[type[BaseModel]] = None) -> Any:
         """
         Get response from any supported model using Pydantic AI's result_type
-        
+
         :param question: question to ask
         :param context: system context to provide
         :param response_model: response model to use (Pydantic BaseModel)
@@ -329,7 +329,7 @@ class StructuredLangModel(LangModel):
 
         async def _run():
             history = self.chat_history.get_all()
-            
+
             # Temporary setup for this specific run if result_type is provided
             # Pydantic AI Agents are usually typed, but we'll use result_type dynamically
             result = await self.agent.run(
@@ -338,11 +338,11 @@ class StructuredLangModel(LangModel):
                 message_history=history,
                 result_type=response_model
             )
-            
+
             # Save new messages to history
             for msg in result.new_messages():
                 self.chat_history.enqueue(msg)
-                
+
             return result.data
 
         return asyncio.run(_run())
