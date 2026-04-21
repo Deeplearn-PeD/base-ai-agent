@@ -8,31 +8,40 @@ providers:
     default_model: "gpt-4o"
     base_url: "https://api.openai.com/v1"
     api_key_env_var: "OPENAI_API_KEY"
+    client_type: "openai"
   
   deepseek:
     default_model: "deepseek-chat"
     base_url: "https://api.deepseek.com/v1"
     api_key_env_var: "DEEPSEEK_API_KEY"
+    client_type: "openai"
   
   anthropic:
     default_model: "claude-3-5-sonnet-20241022"
     base_url: "https://api.anthropic.com"
     api_key_env_var: "ANTHROPIC_API_KEY"
+    client_type: "anthropic"
   
   google:
     default_model: "gemini-1.5-pro"
     base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
     api_key_env_var: "GOOGLE_API_KEY"
+    client_type: "openai"
   
   ollama:
     default_model: "llama3.1"
     base_url: "http://localhost:11434"
     api_key_env_var: "OLLAMA_API_BASE"
+    client_type: "ollama"
   
   qwen:
     default_model: "qwen-plus"
     base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     api_key_env_var: "DASHSCOPE_API_KEY"
-
-
-
+    client_type: "openai"
+  
+  moonshot:
+    default_model: "kimi-k2.5"
+    base_url: "https://api.moonshot.ai/v1"
+    api_key_env_var: "MOONSHOT_API_KEY"
+    client_type: "openai"

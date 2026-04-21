@@ -124,99 +124,83 @@ class LangModel:
         """Reset the chat history"""
         self.chat_history = ChatHistory()
 
-    def _setup_llm_client(self, provider: str='ollama', key: str=''):
+    def add_provider(self, name: str, default_model: str, base_url: str,
+                     api_key_env_var: str, client_type: str):
+        """Register a new provider at runtime.
+
+        Args:
+            name: Provider name (e.g. 'openai', 'ollama').
+            default_model: Default model identifier for this provider.
+            base_url: API base URL for this provider.
+            api_key_env_var: Environment variable name holding the API key.
+            client_type: One of 'openai', 'anthropic', or 'ollama'.
+        """
+        config = {
+            'default_model': default_model,
+            'base_url': base_url,
+            'api_key_env_var': api_key_env_var,
+            'client_type': client_type,
+        }
+
+        CONFIG.setdefault('providers', {})[name] = config
+        LangModel.supported_API_KEYS[name] = api_key_env_var
+        self.keys[name] = os.getenv(api_key_env_var) if api_key_env_var in os.environ else None
+
+        self._available_models = []
+
+    def _setup_llm_client(self, provider: str = 'ollama'):
         """Setup the LLM client for the specified provider using config.yml"""
         self.provider = provider
-        
-        # Get provider configuration from config.yml
-        provider_config = {}
-        if CONFIG and 'providers' in CONFIG:
-            provider_config = CONFIG['providers'].get(provider, {})
-        
-        # Determine base_url and default_model from config, with fallbacks
+        provider_config = CONFIG.get('providers', {}).get(provider, {})
+        client_type = provider_config.get('client_type', 'openai')
         base_url = provider_config.get('base_url')
-        default_model = provider_config.get('default_model')
-        
-        if provider == 'openai':
-            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
-        elif provider == 'deepseek':
+        api_key = self.keys.get(provider)
+
+        if client_type == 'openai':
+            self.llm = OpenAI(api_key=api_key, base_url=base_url)
+        elif client_type == 'anthropic':
+            self.llm = anthropic.Anthropic(api_key=api_key)
+        elif client_type == 'ollama':
+            env_var = provider_config.get('api_key_env_var')
+            if env_var:
+                env_val = os.getenv(env_var)
+                if env_val:
+                    base_url = env_val
             if not base_url:
-                base_url = 'https://api.deepseek.com/v1'
-            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
-        elif provider == 'anthropic':
-            self.llm = anthropic.Anthropic(api_key=self.keys[provider])
-        elif provider == 'google':
-            if not base_url:
-                base_url = 'https://generativelanguage.googleapis.com/v1beta/openai/'
-            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
-        elif provider == 'qwen':
-            if not base_url:
-                base_url = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
-            self.llm = OpenAI(api_key=self.keys[provider], base_url=base_url)
-        elif provider == 'ollama':
-            # For ollama, base_url is used as host
-            if not base_url:
-                base_url = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
-            else:
-                # If base_url is set in config, it should be used
-                # But environment variable may override
-                env_host = os.getenv('OLLAMA_API_BASE')
-                if env_host:
-                    base_url = env_host
+                base_url = 'http://localhost:11434'
             self.llm = Client(host=base_url)
 
     def _fetch_provider_models(self, provider):
         """Fetch models from the specified provider, handling connection errors"""
         try:
-            # Helper to get a temporary client for the provider
-            def get_temp_client():
-                # If self.llm is already initialized for this provider, reuse it
-                if self.llm is not None and self.provider == provider:
-                    return self.llm
-                # Otherwise create a new client based on provider
-                provider_config = {}
-                if CONFIG and 'providers' in CONFIG:
-                    provider_config = CONFIG['providers'].get(provider, {})
-                
-                api_key = self.keys.get(provider)
-                if not api_key:
-                    return None
-                
-                if provider in ['openai', 'deepseek', 'google', 'qwen']:
-                    base_url = provider_config.get('base_url')
-                    if provider == 'deepseek' and not base_url:
-                        base_url = 'https://api.deepseek.com/v1'
-                    elif provider == 'google' and not base_url:
-                        base_url = 'https://generativelanguage.googleapis.com/v1beta/openai/'
-                    elif provider == 'qwen' and not base_url:
-                        base_url = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
-                    return OpenAI(api_key=api_key, base_url=base_url)
-                elif provider == 'anthropic':
-                    return anthropic.Anthropic(api_key=api_key)
-                else:
-                    return None
-            
-            if provider == 'ollama':
-                host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
-                llm = Client(host=host)
+            provider_config = CONFIG.get('providers', {}).get(provider, {})
+            client_type = provider_config.get('client_type', 'openai')
+            base_url = provider_config.get('base_url')
+            api_key = self.keys.get(provider)
+
+            if client_type == 'ollama':
+                env_var = provider_config.get('api_key_env_var')
+                if env_var:
+                    env_val = os.getenv(env_var)
+                    if env_val:
+                        base_url = env_val
+                if not base_url:
+                    base_url = 'http://localhost:11434'
+                llm = Client(host=base_url)
                 return [m['name'].split(':')[0] for m in llm.list()['models']]
-            
-            # For other providers, ensure we have a key
-            if not self.keys.get(provider):
+
+            if not api_key:
                 return []
-            
-            temp_client = get_temp_client()
-            if temp_client is None:
-                return []
-            
-            # Fetch models using the appropriate method
-            if provider == 'anthropic':
-                # Anthropic uses models.list() as well
-                return [m.id for m in temp_client.models.list().data]
+
+            if client_type == 'openai':
+                temp_client = OpenAI(api_key=api_key, base_url=base_url)
+            elif client_type == 'anthropic':
+                temp_client = anthropic.Anthropic(api_key=api_key)
             else:
-                # OpenAI-compatible providers
-                return [m.id for m in temp_client.models.list().data]
-                
+                return []
+
+            return [m.id for m in temp_client.models.list().data]
+
         except Exception as e:
             print(f"Error fetching models from {provider}: {e}")
         return []
@@ -291,12 +275,15 @@ class LangModel:
         """
         if not self.llm:
             self._setup_llm_client(self.provider)
-        # Determine which method to use based on provider
-        if self.provider in ['openai', 'deepseek', 'google']:
+
+        provider_config = CONFIG.get('providers', {}).get(self.provider, {})
+        client_type = provider_config.get('client_type', 'openai')
+
+        if client_type == 'openai':
             return self.get_gpt_response(question, context)
-        elif self.provider == 'anthropic':
+        elif client_type == 'anthropic':
             return self.get_anthropic_response(question, context)
-        else:  # ollama
+        elif client_type == 'ollama':
             return self.get_ollama_response(question, context)
 
     def get_gpt_response(self, question: str, context: str) -> str:
@@ -371,11 +358,8 @@ class StructuredLangModel(LangModel):
         :param model:  Large Language Model to use.
         :param retries: Number of retries to attempt.
         """
-        # If no model is specified, try to get default from config for structured use
         if model is None:
-            # Look for a suitable default model for structured output
             if CONFIG and 'providers' in CONFIG:
-                # Prefer openai's default model
                 openai_config = CONFIG['providers'].get('openai', {})
                 model = openai_config.get('default_model', 'gpt-4o')
             else:
@@ -384,37 +368,32 @@ class StructuredLangModel(LangModel):
         super().__init__(model)
         self.retries = retries
         
-        # Setup instructor based on the found provider using config
-        if self.provider in ['openai', 'deepseek', 'google', 'qwen']:
-            # Get provider configuration
-            provider_config = {}
-            if CONFIG and 'providers' in CONFIG:
-                provider_config = CONFIG['providers'].get(self.provider, {})
-            
-            base_url = provider_config.get('base_url')
-            api_key = self.keys.get(self.provider)
-            
-            # Create OpenAI client with config
+        provider_config = CONFIG.get('providers', {}).get(self.provider, {})
+        client_type = provider_config.get('client_type', 'openai')
+        base_url = provider_config.get('base_url')
+        api_key = self.keys.get(self.provider)
+
+        if client_type == 'openai':
             client_kwargs = {'api_key': api_key}
             if base_url:
                 client_kwargs['base_url'] = base_url
-            
-            self.llm = instructor.from_openai(
-                OpenAI(**client_kwargs)
+            self.llm = instructor.from_openai(OpenAI(**client_kwargs))
+        elif client_type == 'anthropic':
+            self.llm = instructor.from_anthropic(
+                anthropic.Anthropic(api_key=api_key)
             )
-        else:  # ollama or others
-            # For ollama, use the host from config or environment
-            host = os.getenv('OLLAMA_API_BASE', 'http://127.0.0.1:11434')
-            if CONFIG and 'providers' in CONFIG and 'ollama' in CONFIG['providers']:
-                ollama_config = CONFIG['providers']['ollama']
-                config_host = ollama_config.get('base_url')
-                if config_host:
-                    host = config_host
-            
+        elif client_type == 'ollama':
+            env_var = provider_config.get('api_key_env_var')
+            if env_var:
+                env_val = os.getenv(env_var)
+                if env_val:
+                    base_url = env_val
+            if not base_url:
+                base_url = 'http://localhost:11434'
             self.llm = instructor.from_openai(
                 OpenAI(
-                    base_url=host + '/v1' if not host.endswith('/v1') else host,
-                    api_key='ollama'  # Dummy key for ollama
+                    base_url=base_url + '/v1' if not base_url.endswith('/v1') else base_url,
+                    api_key='ollama'
                 ),
                 mode=instructor.Mode.JSON,
                 stream=False
