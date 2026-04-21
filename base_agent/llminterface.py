@@ -2,13 +2,15 @@ import os
 import yaml
 from collections import deque, defaultdict
 from pathlib import Path
+from typing import List, Optional, Union, Any, Dict
 
-import anthropic
 import dotenv
-import instructor
-from ollama import Client
-from openai import OpenAI
 from pydantic import BaseModel
+from pydantic_ai import Agent, RunContext
+from pydantic_ai.models import Model
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, UserPromptPart, TextPart
 
 dotenv.load_dotenv()
 
@@ -27,32 +29,44 @@ except Exception as e:
 class ChatHistory:
     """
     The ChatHistory class is a FIFO queue that keeps track of chat history.
-    This is a non-persistent memory that will last only for a chat session..
+    This is a non-persistent memory that will last only for a chat session.
     Attributes:
         queue (collections.deque): A deque object that stores the chat history.
     """
 
-    def __init__(self, max_size=1000, session_id=None):
+    def __init__(self, max_size=1000):
         """
         Initialize the ChatHistory class with a maximum size.
 
         Args:
             max_size (int): The maximum size of the queue. Defaults to 1000.
         """
-        self.queue = deque(maxlen=max_size)
+        self.queue: deque[ModelMessage] = deque(maxlen=max_size)
 
-    def enqueue(self, item):
+    def enqueue(self, item: Union[ModelMessage, Dict[str, Any]]):
         """
         Add a message to the end of the queue.
+        Converts dict messages (OpenAI format) to Pydantic AI ModelMessage if needed.
 
         Args:
             item: The message to be added to the queue.
         """
-        self.queue.append(item)
+        if isinstance(item, dict):
+            # Backward compatibility for OpenAI style dicts
+            role = item.get('role')
+            content = item.get('content')
+            if role == 'user':
+                self.queue.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+            elif role == 'assistant':
+                self.queue.append(ModelResponse(parts=[TextPart(content=content)]))
+            # System messages are usually handled separately in Pydantic AI Agents as system prompts
+            # but we can store them if needed. In Pydantic AI, system prompts are generally static or dynamic via decorators.
+        else:
+            self.queue.append(item)
 
     def dequeue(self):
         """
-        Remove and return a message  from the front of the queue.
+        Remove and return a message from the front of the queue.
 
         Returns:
             The message removed from the front of the queue. If the queue is empty, returns None.
@@ -61,11 +75,7 @@ class ChatHistory:
             return None
         return self.queue.popleft()
 
-    def _manage_chat_history(self, message: dict, response: dict):
-        self.chat_history.enqueue(message)
-        self.chat_history.enqueue(response)
-
-    def get_all(self):
+    def get_all(self) -> List[ModelMessage]:
         """
         Return all items in the queue as a list without removing them from the queue.
 
@@ -77,7 +87,7 @@ class ChatHistory:
 
 class LangModel:
     """
-    Base class for language model interfaces
+    Base class for language model interfaces using Pydantic AI
     """
     # Load provider configuration from config.yml
     if CONFIG and 'providers' in CONFIG:
@@ -89,7 +99,7 @@ class LangModel:
     else:
         supported_API_KEYS = {}
 
-    def __init__(self, model: str = None, provider=None):
+    def __init__(self, model: str = None, provider: str = None):
         # Initialize keys from environment variables using supported_API_KEYS
         self.keys = {}
         for provider_name, env_var in self.supported_API_KEYS.items():
@@ -97,13 +107,13 @@ class LangModel:
                 self.keys[provider_name] = os.getenv(env_var)
             else:
                 self.keys[provider_name] = None
-        
-        self.llm = None
+
+        self.agent: Optional[Agent] = None
         self._available_models = []
-        self.provider_models = defaultdict(lambda: [])
-        self.provider = None
+        self.provider_models = defaultdict(list)
+        self.provider = provider
         self.chat_history = ChatHistory()
-        
+
         # If no model is specified, try to get default model from config.yml
         if model is None:
             # Try to get default model from the first provider that has a key
@@ -111,13 +121,15 @@ class LangModel:
                 if provider_name in self.keys and self.keys[provider_name]:
                     model = config.get('default_model')
                     if model:
+                        self.provider = provider_name
                         break
             # If still None, use a fallback
             if model is None:
                 model = 'qwen3'
-        
+
         self.model = model
-        self.available_models  # This triggers fetching models
+        # Pre-fetch models to populate provider_models
+        _ = self.available_models
         self._set_active_model(model)
 
     def reset_chat_history(self):
@@ -166,13 +178,11 @@ class LangModel:
                 env_val = os.getenv(env_var)
                 if env_val:
                     base_url = env_val
-            if not base_url:
                 base_url = 'http://localhost:11434'
-            self.llm = Client(host=base_url)
 
-    def _fetch_provider_models(self, provider):
-        """Fetch models from the specified provider, handling connection errors"""
-        try:
+        # Default to OpenAIModel for OpenAI-compatible providers
+        # Most providers in config.yml (OpenAI, DeepSeek, Google, Qwen, Ollama)
+        # are used via their OpenAI-compatible endpoints.
             provider_config = CONFIG.get('providers', {}).get(provider, {})
             client_type = provider_config.get('client_type', 'openai')
             base_url = provider_config.get('base_url')
@@ -187,7 +197,11 @@ class LangModel:
                 if not base_url:
                     base_url = 'http://localhost:11434'
                 llm = Client(host=base_url)
-                return [m['name'].split(':')[0] for m in llm.list()['models']]
+        # so we keep a simplified version or reuse existing logic if needed.
+        # For now, we'll use a basic list or rely on config if fetching fails.
+        try:
+                import httpx
+                if resp.status_code == 200:
 
             if not api_key:
                 return []
@@ -197,6 +211,7 @@ class LangModel:
             elif client_type == 'anthropic':
                 temp_client = anthropic.Anthropic(api_key=api_key)
             else:
+            if not api_key:
                 return []
 
             return [m.id for m in temp_client.models.list().data]
@@ -212,22 +227,26 @@ class LangModel:
         """
         if self._available_models:
             return self._available_models
+
         models = []
         self.provider_models = {}
-        # Always include ollama models
+
+        # Always try ollama
         try:
             ollama_models = self._fetch_provider_models('ollama')
-            self.provider_models['ollama'] = ollama_models
-            models.extend(ollama_models)
+            if ollama_models:
+                self.provider_models['ollama'] = ollama_models
+                models.extend(ollama_models)
         except Exception:
             pass
-        
+
         # Add models from other providers if their API keys are available
         for provider, key in self.keys.items():
-            if key:
+            if key and provider != 'ollama':
                 mods = self._fetch_provider_models(provider)
-                self.provider_models[provider] = mods
-                models.extend(mods)
+                if mods:
+                    self.provider_models[provider] = mods
+                    models.extend(mods)
 
         # Remove duplicates and sort
         models = list(set(models))
@@ -237,115 +256,68 @@ class LangModel:
 
     def _find_model_provider(self, model: str):
         """Find which provider supports the requested model"""
-
         for provider in self.keys.keys():
-            x = self.available_models
-            try:
-                if model in self.provider_models[provider]:
-                    return provider
-            except KeyError:
-                print(f"Provider {provider} not found. Skipping")
-        else:
-            print(f"Model {model} not found in any provider")
-
-
+            if model in self.provider_models.get(provider, []):
+                return provider
+        return None
 
     def _set_active_model(self, model: str):
-        # Search across all available providers
         found_provider = self._find_model_provider(model)
-        if model in self.available_models:
+        if found_provider:
             self.model = model
             self._setup_llm_client(found_provider)
         else:
-            print(f"Model {model} not found in any available provider.\n"
-                f"Available models: {self.available_models}\n"
-                  f"Setting up {'qwen3' if 'qwen3' in self.available_models else self.available_models[-1]} model."
-            )
-            self.model = 'qwen3' if 'qwen3' in self.available_models else self.available_models[-1]
-            self._setup_llm_client(found_provider)
+            # Fallback logic
+            fallback_model = 'qwen3' if 'qwen3' in self.available_models else \
+                            (self.available_models[-1] if self.available_models else model)
+            print(f"Model {model} not found. Using fallback: {fallback_model}")
+            self.model = fallback_model
+            provider = self._find_model_provider(self.model) or 'ollama'
+            self._setup_llm_client(provider)
 
     def get_response(self, question: str, context: str = None) -> str:
         """
-        Get response from any supported model
+        Get response from the agent
         Args:
             question: str: question to ask
-            context: str: question context to provide
+            context: str: system context to provide
 
         Returns: str: model's response
         """
-        if not self.llm:
-            self._setup_llm_client(self.provider)
+        if not self.agent:
+            self._setup_llm_client(self.provider or 'ollama')
 
         provider_config = CONFIG.get('providers', {}).get(self.provider, {})
         client_type = provider_config.get('client_type', 'openai')
 
         if client_type == 'openai':
-            return self.get_gpt_response(question, context)
         elif client_type == 'anthropic':
-            return self.get_anthropic_response(question, context)
         elif client_type == 'ollama':
-            return self.get_ollama_response(question, context)
 
-    def get_gpt_response(self, question: str, context: str) -> str:
-        msg = {'role': 'user', 'content': question}
-        self.chat_history.enqueue(msg)
-        history = self.chat_history.get_all()
-        response = self.llm.chat.completions.create(model=self.model,
-                                 messages=[{'role': 'system', 'content': context}] + history,
-                                 # max_tokens=1000,
-                                 # temperature=0.1,
-                                 # top_p=1
-                                 )
-        resp_msg = {'role': 'assistant', 'content': response.choices[0].message.content}
-        self.chat_history.enqueue(resp_msg)
-        return response.choices[0].message.content
+        import asyncio
 
-    def get_anthropic_response(self, question: str, context: str) -> str:
-        """
-        Get response from Anthropic models
-        :param question: question to ask
-        :param context: context to provide
-        :return: model's response
-        """
-        msg = {'role': 'user', 'content': context + '\n\n' + question}
-        self.chat_history.enqueue(msg)
-        messages = self.chat_history.get_all()
-        
-        # Convert messages to Anthropic format
-        system_prompt = None
-        anthropic_messages = []
-        for msg in messages:
-            if msg['role'] == 'system':
-                system_prompt = msg['content']
-            else:
-                anthropic_messages.append({"role": msg['role'], "content": msg['content']})
-        
-        response = self.llm.messages.create(
-            model=self.model,
-            messages=anthropic_messages,
-            system=system_prompt,
-            max_tokens=1000
-        )
-        resp_msg = {'role': 'assistant', 'content': response.content[0].text}
-        self.chat_history.enqueue(resp_msg)
-        
-        return response.content[0].text
+        async def _run():
+            # Pass history to the run
+            history = self.chat_history.get_all()
 
-    def get_ollama_response(self, question: str, context: str) -> str:
-        """
-        Get response from any Ollama supported model
-        :param question: question to ask
-        :param context: context to provide
-        :return: model's response
-        """
-        msg = {'role': 'user', 'content': context + '\n\n' + question}
-        self.chat_history.enqueue(msg)
-        messages = self.chat_history.get_all()
-        response = self.llm.chat(model=self.model, messages=messages, options={'temperature': 0})
-        self.chat_history.enqueue(response['message'])
+            # pydantic_ai.Agent.run() supports message_history
+            result = await self.agent.run(
+                question,
+                system_prompt=context,
+                message_history=history
+            )
 
-        return response['message']['content']
+            # Save new messages to history
+            # result.new_messages() contains only the new messages from this run
+            for msg in result.new_messages():
+                self.chat_history.enqueue(msg)
 
+            return result.data
+
+        # Use sync wrapper for async call
+        import nest_asyncio
+        nest_asyncio.apply()
+        return asyncio.run(_run())
 
 class StructuredLangModel(LangModel):
     """
@@ -364,24 +336,20 @@ class StructuredLangModel(LangModel):
                 model = openai_config.get('default_model', 'gpt-4o')
             else:
                 model = 'gpt-4o'
-        
+
         super().__init__(model)
         self.retries = retries
-        
+
         provider_config = CONFIG.get('providers', {}).get(self.provider, {})
         client_type = provider_config.get('client_type', 'openai')
         base_url = provider_config.get('base_url')
         api_key = self.keys.get(self.provider)
 
         if client_type == 'openai':
-            client_kwargs = {'api_key': api_key}
-            if base_url:
-                client_kwargs['base_url'] = base_url
             self.llm = instructor.from_openai(OpenAI(**client_kwargs))
         elif client_type == 'anthropic':
             self.llm = instructor.from_anthropic(
                 anthropic.Anthropic(api_key=api_key)
-            )
         elif client_type == 'ollama':
             env_var = provider_config.get('api_key_env_var')
             if env_var:
@@ -390,44 +358,39 @@ class StructuredLangModel(LangModel):
                     base_url = env_val
             if not base_url:
                 base_url = 'http://localhost:11434'
-            self.llm = instructor.from_openai(
-                OpenAI(
                     base_url=base_url + '/v1' if not base_url.endswith('/v1') else base_url,
                     api_key='ollama'
-                ),
-                mode=instructor.Mode.JSON,
-                stream=False
-            )
-
-    def reset_chat_history(self):
         """
-        Reset the chat history.
-        """
-        self.chat_history = ChatHistory()
-
-    def get_response(self, question: str, context: str = "", response_model: BaseModel = None):
-        """
-        Get response from any supported model
+        Get response from any supported model using Pydantic AI's result_type
 
         :param question: question to ask
-        :param context: question context to provide
-        :param response_model: response model to use
+        :param context: system context to provide
+        :param response_model: response model to use (Pydantic BaseModel)
         :return: model's response in the specified format
         """
-        msg = {'role': 'user', 'content': context + '\n\n' + question}
-        self.chat_history.enqueue(msg)
-        messages = self.chat_history.get_all()
-        
-        # Use instructor to get structured response
-        response = self.llm.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            response_model=response_model,
-            max_retries=self.retries
-        )
-        
-        # The response is already the structured model instance
-        resp_msg = {'role': 'assistant', 'content': str(response)}
-        self.chat_history.enqueue(resp_msg)
+        if not self.agent:
+            self._setup_llm_client(self.provider or 'ollama')
 
-        return response
+        import asyncio
+        import nest_asyncio
+        nest_asyncio.apply()
+
+        async def _run():
+            history = self.chat_history.get_all()
+
+            # Temporary setup for this specific run if result_type is provided
+            # Pydantic AI Agents are usually typed, but we'll use result_type dynamically
+            result = await self.agent.run(
+                question,
+                system_prompt=context,
+                message_history=history,
+                result_type=response_model
+            )
+
+            # Save new messages to history
+            for msg in result.new_messages():
+                self.chat_history.enqueue(msg)
+
+            return result.data
+
+        return asyncio.run(_run())
