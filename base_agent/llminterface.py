@@ -8,7 +8,7 @@ import dotenv
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, UserPromptPart, TextPart
 
@@ -52,15 +52,12 @@ class ChatHistory:
             item: The message to be added to the queue.
         """
         if isinstance(item, dict):
-            # Backward compatibility for OpenAI style dicts
             role = item.get('role')
             content = item.get('content')
             if role == 'user':
                 self.queue.append(ModelRequest(parts=[UserPromptPart(content=content)]))
             elif role == 'assistant':
                 self.queue.append(ModelResponse(parts=[TextPart(content=content)]))
-            # System messages are usually handled separately in Pydantic AI Agents as system prompts
-            # but we can store them if needed. In Pydantic AI, system prompts are generally static or dynamic via decorators.
         else:
             self.queue.append(item)
 
@@ -116,14 +113,12 @@ class LangModel:
 
         # If no model is specified, try to get default model from config.yml
         if model is None:
-            # Try to get default model from the first provider that has a key
             for provider_name, config in CONFIG.get('providers', {}).items():
                 if provider_name in self.keys and self.keys[provider_name]:
                     model = config.get('default_model')
                     if model:
                         self.provider = provider_name
                         break
-            # If still None, use a fallback
             if model is None:
                 model = 'qwen3'
 
@@ -160,61 +155,54 @@ class LangModel:
 
         self._available_models = []
 
-    def _setup_llm_client(self, provider: str = 'ollama'):
-        """Setup the LLM client for the specified provider using config.yml"""
-        self.provider = provider
+    def _get_model_instance(self, provider: str, model_name: str) -> Model:
+        """Create a Pydantic AI Model instance based on provider and config"""
         provider_config = CONFIG.get('providers', {}).get(provider, {})
-        client_type = provider_config.get('client_type', 'openai')
         base_url = provider_config.get('base_url')
         api_key = self.keys.get(provider)
 
-        if client_type == 'openai':
-            self.llm = OpenAI(api_key=api_key, base_url=base_url)
-        elif client_type == 'anthropic':
-            self.llm = anthropic.Anthropic(api_key=api_key)
-        elif client_type == 'ollama':
-            env_var = provider_config.get('api_key_env_var')
-            if env_var:
-                env_val = os.getenv(env_var)
-                if env_val:
-                    base_url = env_val
-                base_url = 'http://localhost:11434'
+        if provider == 'anthropic':
+            return AnthropicModel(model_name, api_key=api_key)
 
         # Default to OpenAIModel for OpenAI-compatible providers
         # Most providers in config.yml (OpenAI, DeepSeek, Google, Qwen, Ollama)
         # are used via their OpenAI-compatible endpoints.
+        if provider == 'ollama' and base_url and not base_url.endswith('/v1'):
+            base_url = f"{base_url.rstrip('/')}/v1"
+
+        return OpenAIModel(model_name, api_key=api_key or 'dummy', base_url=base_url)
+
+    def _setup_llm_client(self, provider: str = 'ollama'):
+        """Setup the Pydantic AI Agent for the specified provider"""
+        self.provider = provider
+        model_instance = self._get_model_instance(provider, self.model)
+        self.agent = Agent(model_instance)
+
+    def _fetch_provider_models(self, provider):
+        """Fetch models from the specified provider using Pydantic AI compatible logic"""
+        try:
+            if provider == 'ollama':
+                import httpx
+                host = os.getenv('OLLAMA_API_BASE', 'http://localhost:11434')
+                resp = httpx.get(f"{host}/api/tags", timeout=2.0)
+                if resp.status_code == 200:
+                    return [m['name'].split(':')[0] for m in resp.json().get('models', [])]
+                return []
+
+            # For OpenAI-compatible providers, use httpx directly
             provider_config = CONFIG.get('providers', {}).get(provider, {})
-            client_type = provider_config.get('client_type', 'openai')
             base_url = provider_config.get('base_url')
             api_key = self.keys.get(provider)
 
-            if client_type == 'ollama':
-                env_var = provider_config.get('api_key_env_var')
-                if env_var:
-                    env_val = os.getenv(env_var)
-                    if env_val:
-                        base_url = env_val
-                if not base_url:
-                    base_url = 'http://localhost:11434'
-                llm = Client(host=base_url)
-        # so we keep a simplified version or reuse existing logic if needed.
-        # For now, we'll use a basic list or rely on config if fetching fails.
-        try:
-                import httpx
-                if resp.status_code == 200:
-
             if not api_key:
                 return []
 
-            if client_type == 'openai':
-                temp_client = OpenAI(api_key=api_key, base_url=base_url)
-            elif client_type == 'anthropic':
-                temp_client = anthropic.Anthropic(api_key=api_key)
-            else:
-            if not api_key:
-                return []
-
-            return [m.id for m in temp_client.models.list().data]
+            import httpx
+            headers = {"Authorization": f"Bearer {api_key}"}
+            list_url = f"{base_url.rstrip('/')}/models"
+            resp = httpx.get(list_url, headers=headers, timeout=5.0)
+            if resp.status_code == 200:
+                return [m['id'] for m in resp.json().get('data', [])]
 
         except Exception as e:
             print(f"Error fetching models from {provider}: {e}")
@@ -267,7 +255,6 @@ class LangModel:
             self.model = model
             self._setup_llm_client(found_provider)
         else:
-            # Fallback logic
             fallback_model = 'qwen3' if 'qwen3' in self.available_models else \
                             (self.available_models[-1] if self.available_models else model)
             print(f"Model {model} not found. Using fallback: {fallback_model}")
@@ -287,34 +274,22 @@ class LangModel:
         if not self.agent:
             self._setup_llm_client(self.provider or 'ollama')
 
-        provider_config = CONFIG.get('providers', {}).get(self.provider, {})
-        client_type = provider_config.get('client_type', 'openai')
-
-        if client_type == 'openai':
-        elif client_type == 'anthropic':
-        elif client_type == 'ollama':
-
         import asyncio
 
         async def _run():
-            # Pass history to the run
             history = self.chat_history.get_all()
 
-            # pydantic_ai.Agent.run() supports message_history
             result = await self.agent.run(
                 question,
                 system_prompt=context,
                 message_history=history
             )
 
-            # Save new messages to history
-            # result.new_messages() contains only the new messages from this run
             for msg in result.new_messages():
                 self.chat_history.enqueue(msg)
 
             return result.data
 
-        # Use sync wrapper for async call
         import nest_asyncio
         nest_asyncio.apply()
         return asyncio.run(_run())
@@ -340,26 +315,7 @@ class StructuredLangModel(LangModel):
         super().__init__(model)
         self.retries = retries
 
-        provider_config = CONFIG.get('providers', {}).get(self.provider, {})
-        client_type = provider_config.get('client_type', 'openai')
-        base_url = provider_config.get('base_url')
-        api_key = self.keys.get(self.provider)
-
-        if client_type == 'openai':
-            self.llm = instructor.from_openai(OpenAI(**client_kwargs))
-        elif client_type == 'anthropic':
-            self.llm = instructor.from_anthropic(
-                anthropic.Anthropic(api_key=api_key)
-        elif client_type == 'ollama':
-            env_var = provider_config.get('api_key_env_var')
-            if env_var:
-                env_val = os.getenv(env_var)
-                if env_val:
-                    base_url = env_val
-            if not base_url:
-                base_url = 'http://localhost:11434'
-                    base_url=base_url + '/v1' if not base_url.endswith('/v1') else base_url,
-                    api_key='ollama'
+    def get_response(self, question: str, context: str = "", response_model: Optional[type[BaseModel]] = None) -> Any:
         """
         Get response from any supported model using Pydantic AI's result_type
 
@@ -378,8 +334,6 @@ class StructuredLangModel(LangModel):
         async def _run():
             history = self.chat_history.get_all()
 
-            # Temporary setup for this specific run if result_type is provided
-            # Pydantic AI Agents are usually typed, but we'll use result_type dynamically
             result = await self.agent.run(
                 question,
                 system_prompt=context,
@@ -387,7 +341,6 @@ class StructuredLangModel(LangModel):
                 result_type=response_model
             )
 
-            # Save new messages to history
             for msg in result.new_messages():
                 self.chat_history.enqueue(msg)
 
