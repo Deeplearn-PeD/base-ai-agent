@@ -8,8 +8,10 @@ import dotenv
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, UserPromptPart, TextPart
 
 dotenv.load_dotenv()
@@ -162,15 +164,18 @@ class LangModel:
         api_key = self.keys.get(provider)
 
         if provider == 'anthropic':
-            return AnthropicModel(model_name, api_key=api_key)
+            return AnthropicModel(model_name, provider=AnthropicProvider(api_key=api_key))
 
-        # Default to OpenAIModel for OpenAI-compatible providers
+        # Default to OpenAIChatModel for OpenAI-compatible providers
         # Most providers in config.yml (OpenAI, DeepSeek, Google, Qwen, Ollama)
         # are used via their OpenAI-compatible endpoints.
         if provider == 'ollama' and base_url and not base_url.endswith('/v1'):
             base_url = f"{base_url.rstrip('/')}/v1"
 
-        return OpenAIModel(model_name, api_key=api_key or 'dummy', base_url=base_url)
+        return OpenAIChatModel(
+            model_name,
+            provider=OpenAIProvider(api_key=api_key or 'dummy', base_url=base_url),
+        )
 
     def _setup_llm_client(self, provider: str = 'ollama'):
         """Setup the Pydantic AI Agent for the specified provider"""
