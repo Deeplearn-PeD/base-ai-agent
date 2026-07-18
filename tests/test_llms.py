@@ -48,7 +48,7 @@ class TestLangModel(unittest.TestCase):
         mock_get_model_instance.return_value = MagicMock()
         mock_agent = MagicMock()
         mock_result = MagicMock()
-        mock_result.data = "test response"
+        mock_result.output = "test response"
         mock_result.new_messages = MagicMock(return_value=[])
         mock_agent.run = AsyncMock(return_value=mock_result)
 
@@ -66,7 +66,7 @@ class TestLangModel(unittest.TestCase):
         mock_get_model_instance.return_value = MagicMock()
         mock_agent = MagicMock()
         mock_result = MagicMock()
-        mock_result.data = "test response"
+        mock_result.output = "test response"
         mock_result.new_messages = MagicMock(return_value=[])
         mock_agent.run = AsyncMock(return_value=mock_result)
 
@@ -91,7 +91,7 @@ class TestStructuredLangModel(unittest.TestCase):
 
         mock_agent = MagicMock()
         mock_result = MagicMock()
-        mock_result.data = Character(
+        mock_result.output = Character(
             name="Harry Potter",
             age=37,
             fact=["He is the chosen one.", "He has a lightning-shaped scar."],
@@ -105,6 +105,14 @@ class TestStructuredLangModel(unittest.TestCase):
                 "Tell me about Harry Potter", "", response_model=Character
             )
             self.assertIsInstance(response, Character)
+
+        # Regression: pydantic-ai 1.x renamed system_prompt->instructions
+        # and result_type->output_type.
+        _, kwargs = mock_agent.run.call_args
+        self.assertIn("instructions", kwargs)
+        self.assertNotIn("system_prompt", kwargs)
+        self.assertIn("output_type", kwargs)
+        self.assertNotIn("result_type", kwargs)
 
 
 if __name__ == "__main__":

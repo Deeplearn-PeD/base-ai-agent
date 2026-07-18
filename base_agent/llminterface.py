@@ -286,14 +286,14 @@ class LangModel:
 
             result = await self.agent.run(
                 question,
-                system_prompt=context,
+                instructions=context,
                 message_history=history
             )
 
             for msg in result.new_messages():
                 self.chat_history.enqueue(msg)
 
-            return result.data
+            return result.output
 
         import nest_asyncio
         nest_asyncio.apply()
@@ -322,7 +322,7 @@ class StructuredLangModel(LangModel):
 
     def get_response(self, question: str, context: str = "", response_model: Optional[type[BaseModel]] = None) -> Any:
         """
-        Get response from any supported model using Pydantic AI's result_type
+        Get response from any supported model using Pydantic AI's output_type
 
         :param question: question to ask
         :param context: system context to provide
@@ -341,14 +341,14 @@ class StructuredLangModel(LangModel):
 
             result = await self.agent.run(
                 question,
-                system_prompt=context,
+                instructions=context,
                 message_history=history,
-                result_type=response_model
+                output_type=response_model
             )
 
             for msg in result.new_messages():
                 self.chat_history.enqueue(msg)
 
-            return result.data
+            return result.output
 
         return asyncio.run(_run())
