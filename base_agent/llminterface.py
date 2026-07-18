@@ -248,7 +248,21 @@ class LangModel:
         return models
 
     def _find_model_provider(self, model: str):
-        """Find which provider supports the requested model"""
+        """Find which provider supports the requested model.
+
+        When a model is listed by several providers, prefer the one whose
+        configured ``model_prefix`` matches (so e.g. glm-* routes to Zhipu
+        rather than another provider that merely catalogues it). Falls back
+        to the first provider that lists the model.
+        """
+        for provider in self.keys.keys():
+            prefix = CONFIG.get('providers', {}).get(provider, {}).get('model_prefix', '')
+            if (
+                prefix
+                and model.startswith(prefix)
+                and model in self.provider_models.get(provider, [])
+            ):
+                return provider
         for provider in self.keys.keys():
             if model in self.provider_models.get(provider, []):
                 return provider
